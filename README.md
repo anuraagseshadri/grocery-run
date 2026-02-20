@@ -1,5 +1,5 @@
 
-  # Grocery Checklist App
+  # Grocery Run
 
   This is a code bundle for Grocery Checklist App. The original project is available at https://www.figma.com/design/3iM5rlyyrudgkQIaVe9Q45/Grocery-Checklist-App.
 
