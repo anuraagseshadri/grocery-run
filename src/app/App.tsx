@@ -43,6 +43,7 @@ const getAutoCategory = (name: string): string | null => {
     "🥤 Beverages & Coffee": ["water", "juice", "soda", "pop", "coffee", "tea", "beer", "wine", "liquor", "drink"],
     "🧼 Household & Cleaning": ["paper towel", "toilet paper", "trash", "soap", "detergent", "clean", "foil", "wrap", "sponge", "tissue", "bleach"],
     "🧴 Personal & Pet Care": ["shampoo", "toothpaste", "brush", "lotion", "deodorant", "dog", "cat", "pet", "pad", "tampon", "body wash"],
+    "💊 Health & Pharmacy": ["pill", "tablet", "medicine", "vitamin", "tylenol", "advil", "ibuprofen", "band-aid", "pharmacy", "drug", "supplement", "health", "cold", "flu"],
     "👶 Baby": ["diaper", "wipe", "formula", "baby food", "pacifier", "soother", "nappy", "bottle"]
   };
   for (const [category, keywords] of Object.entries(categoryKeywords)) {
@@ -72,11 +73,12 @@ const EMOJI_MAP: Record<string, string> = {
   water: "💧", juice: "🧃", soda: "🥤", pop: "🥤", coffee: "☕", tea: "🍵",
   beer: "🍺", wine: "🍷", liquor: "🥃", drink: "🍹",
   "paper towel": "🧻", "toilet paper": "🧻", soap: "🧼", sponge: "🧽",
-  diaper: "🧷", formula: "🍼", wipe: "🧻", pet: "🐕", dog: "🐕", cat: "🐈", toothpaste: "🪥"
+  diaper: "🧷", formula: "🍼", wipe: "🧻", pet: "🐕", dog: "🐕", cat: "🐈", toothpaste: "🪥",
+  pill: "💊", tablet: "💊", medicine: "💊", vitamin: "💊", tylenol: "💊", advil: "💊"
 };
 
-const GROCERY_CATEGORIES = ["🥬 Produce (Fruits & Veggies)", "🥛 Dairy & Eggs", "🥩 Meat & Seafood", "🍞 Bakery", "🥜 Nuts & Seeds", "🥫 Pantry", "❄️ Frozen Foods", "🍿 Snacks & Candy", "🥤 Beverages & Coffee", "🧼 Household & Cleaning", "🧴 Personal & Pet Care", "👶 Baby", "📦 Other"];
-const PRESET_STORES = ["Costco", "FreshCo", "No Frills", "Walmart", "Loblaws", "Other"];
+const GROCERY_CATEGORIES = ["🥬 Produce (Fruits & Veggies)", "🥛 Dairy & Eggs", "🥩 Meat & Seafood", "🍞 Bakery", "🥜 Nuts & Seeds", "🥫 Pantry", "❄️ Frozen Foods", "🍿 Snacks & Candy", "🥤 Beverages & Coffee", "🧼 Household & Cleaning", "🧴 Personal & Pet Care", "💊 Health & Pharmacy", "👶 Baby", "📦 Other"];
+const PRESET_STORES = ["Costco", "FreshCo", "No Frills", "Walmart", "SDM", "Other"];
 
 // --- 3. BRAND COLOR MAPPING & LOGO DOMAINS ---
 const STORE_DOMAINS: Record<string, string> = {
@@ -84,7 +86,7 @@ const STORE_DOMAINS: Record<string, string> = {
   "FreshCo": "freshco.com",
   "No Frills": "nofrills.ca",
   "Walmart": "walmart.ca",
-  "Loblaws": "loblaws.ca"
+  "SDM": "shoppersdrugmart.ca"
 };
 
 const STORE_COLORS: Record<string, { text: string, bg: string, border: string, badge: string }> = {
@@ -92,7 +94,7 @@ const STORE_COLORS: Record<string, { text: string, bg: string, border: string, b
   "FreshCo": { text: "text-green-700 dark:text-green-400", bg: "bg-green-50 dark:bg-green-950/40", border: "border-green-200 dark:border-green-900/50", badge: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400" },
   "No Frills": { text: "text-yellow-700 dark:text-yellow-400", bg: "bg-yellow-50 dark:bg-yellow-950/40", border: "border-yellow-200 dark:border-yellow-900/50", badge: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400" },
   "Walmart": { text: "text-blue-700 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/40", border: "border-blue-200 dark:border-blue-900/50", badge: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400" },
-  "Loblaws": { text: "text-orange-700 dark:text-orange-400", bg: "bg-orange-50 dark:bg-orange-950/40", border: "border-orange-200 dark:border-orange-900/50", badge: "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400" },
+  "SDM": { text: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/40", border: "border-red-200 dark:border-red-900/50", badge: "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400" },
   "Other": { text: "text-purple-700 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-950/40", border: "border-purple-200 dark:border-purple-900/50", badge: "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-400" }
 };
 
@@ -100,7 +102,8 @@ const getStoreColor = (storeName?: string) => {
   if (!storeName || storeName === "Any Store") {
     return { text: "text-slate-500 dark:text-slate-400", bg: "bg-slate-50 dark:bg-slate-800/50", border: "border-slate-200 dark:border-slate-700", badge: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" };
   }
-  return STORE_COLORS[storeName] || STORE_COLORS["Other"];
+  // Handles legacy stores (like "Loblaws") that are no longer in the dictionary
+  return STORE_COLORS[storeName] || { text: "text-slate-500 dark:text-slate-400", bg: "bg-slate-50 dark:bg-slate-800/50", border: "border-slate-200 dark:border-slate-700", badge: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" };
 };
 
 const normalizeName = (name: string) => {
@@ -147,7 +150,7 @@ export default function App() {
   const [categoryPrefs, setCategoryPrefs] = useState<Record<string, string>>({});
   const [storePrefs, setStorePrefs] = useState<Record<string, string>>({});
   
-  // NEW: Memory bank for custom emojis
+  // Memory bank for custom emojis
   const [emojiPrefs, setEmojiPrefs] = useState<Record<string, string>>({});
   
   const [categoryOrder, setCategoryOrder] = useState<string[]>(GROCERY_CATEGORIES);
@@ -163,6 +166,7 @@ export default function App() {
     if (localStorage.getItem('groceryStorePrefs')) setStorePrefs(JSON.parse(localStorage.getItem('groceryStorePrefs')!));
     if (localStorage.getItem('groceryEmojiPrefs')) setEmojiPrefs(JSON.parse(localStorage.getItem('groceryEmojiPrefs')!));
     if (localStorage.getItem('groceryTheme') === 'dark') setDarkMode(true);
+    // Safely appends the new Health & Pharmacy category to the bottom of the user's existing layout
     if (localStorage.getItem('groceryCategoryOrder')) setCategoryOrder(Array.from(new Set([...JSON.parse(localStorage.getItem('groceryCategoryOrder')!), ...GROCERY_CATEGORIES])));
   }, []);
 
@@ -186,14 +190,12 @@ export default function App() {
   const handleAddItem = (rawInputName: string, manualCategory?: string, manualStore?: string, forceAdd = false) => {
     if (!rawInputName.trim()) return;
 
-    // 1. Extract emojis using modern Unicode property escapes
     const emojiRegex = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu;
     const extractedEmojis = rawInputName.match(emojiRegex);
     const customEmoji = extractedEmojis ? extractedEmojis.join('') : null;
 
-    // 2. Clean the name so we don't duplicate emojis, and normalize it for matching
     const cleanName = rawInputName.replace(emojiRegex, '').trim();
-    if (!cleanName) return; // Prevent adding just an emoji with no text
+    if (!cleanName) return; 
     const normName = normalizeName(cleanName);
 
     const existing = items.find(i => !i.isHistory && normalizeName(i.name) === normName);
@@ -203,7 +205,6 @@ export default function App() {
       return;
     }
 
-    // 3. Determine the final emoji (Custom override > Saved Preference > Default Emoji Map)
     const finalEmoji = customEmoji || emojiPrefs[normName] || EMOJI_MAP[normName] || "";
     const displayName = finalEmoji ? `${cleanName} ${finalEmoji}` : cleanName;
     
@@ -217,7 +218,6 @@ export default function App() {
       setItems(prev => [{ id: Date.now().toString(), name: displayName, category: finalCategory, store: finalStore, purchaseCount: 0, purchaseDates: [], checkedOut: false, isHistory: false, addedAt: new Date().toISOString() }, ...prev]);
     }
     
-    // Save preferences
     if (customEmoji) setEmojiPrefs(prev => ({ ...prev, [normName]: customEmoji }));
     if (manualCategory) setCategoryPrefs(prev => ({ ...prev, [normName]: manualCategory }));
     if (manualStore && manualStore !== "Any Store") setStorePrefs(prev => ({ ...prev, [normName]: manualStore }));
@@ -235,7 +235,7 @@ export default function App() {
     const newStorePrefs = { ...storePrefs };
     items.forEach(item => {
       if (item.checkedOut) {
-        const norm = normalizeName(item.name);
+        const norm = normalizeName(item.name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim());
         if (item.category !== "📦 Other") newCatPrefs[norm] = item.category;
         if (item.store && item.store !== "Any Store") newStorePrefs[norm] = item.store;
       }
@@ -249,7 +249,7 @@ export default function App() {
   const handleUpdateCategory = (id: string, newCategory: string) => {
     setItems(prev => prev.map(i => {
       if (i.id === id) {
-        const norm = normalizeName(i.name);
+        const norm = normalizeName(i.name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim());
         setCategoryPrefs(p => ({ ...p, [norm]: newCategory }));
         return { ...i, category: newCategory };
       }
@@ -260,7 +260,7 @@ export default function App() {
   const handleUpdateStore = (id: string, newStore: string) => {
     setItems(prev => prev.map(i => {
       if (i.id === id) {
-        const norm = normalizeName(i.name);
+        const norm = normalizeName(i.name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim());
         if (newStore) {
           setStorePrefs(p => ({ ...p, [norm]: newStore }));
         }
@@ -353,7 +353,7 @@ export default function App() {
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-3 flex items-center gap-2"><Sparkles className="w-3 h-3" /> Running Low?</h3>
                 <div className="flex flex-wrap gap-2">
                   {suggestions.map(item => (
-                    <button key={item.id} onClick={() => handleAddItem(item.name)} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all hover:scale-105 active:scale-95 ${darkMode ? 'bg-slate-900 border-slate-700 hover:border-primary' : 'bg-white border-slate-200 hover:border-primary shadow-sm'}`}>
+                    <button key={item.id} onClick={() => handleAddItem(item.name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim())} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all hover:scale-105 active:scale-95 ${darkMode ? 'bg-slate-900 border-slate-700 hover:border-primary' : 'bg-white border-slate-200 hover:border-primary shadow-sm'}`}>
                       {item.name} <Plus className="w-3 h-3 text-primary" />
                     </button>
                   ))}
@@ -512,7 +512,7 @@ export default function App() {
                         {item.purchaseDates && item.purchaseDates.length > 0 ? getTimeAgo(item.purchaseDates[item.purchaseDates.length - 1]) : "Never purchased"}
                       </p>
                     </div>
-                    <button onClick={() => handleAddItem(item.name, undefined, undefined, true)} className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors"><RefreshCcw className="w-5 h-5" /></button>
+                    <button onClick={() => handleAddItem(item.name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim(), undefined, undefined, true)} className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors"><RefreshCcw className="w-5 h-5" /></button>
                   </div>
                 )})}
                 
