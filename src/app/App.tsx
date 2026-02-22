@@ -32,7 +32,7 @@ const SpeedCartIcon = ({ className }: { className?: string }) => (
 const getAutoCategory = (name: string): string | null => {
   const lower = name.toLowerCase();
   const categoryKeywords: Record<string, string[]> = {
-    "🥬 Produce (Fruits & Veggies)": ["onion", "tomato", "potato", "apple", "banana", "orange", "grape", "spinach", "lettuce", "broccoli", "carrot", "garlic", "ginger", "pepper", "mushroom", "berry", "lemon", "lime", "avocado", "cilantro", "coriander", "okra", "palak", "fruit", "veg", "salad", "watermelon", "strawberry", "blueberry", "melon", "cherry", "peach", "mango", "pineapple", "coconut", "kiwi", "eggplant", "corn", "cucumber"],
+    "🥬 Produce (Fruits & Veggies)": ["onion", "tomato", "potato", "apple", "banana", "orange", "grape", "spinach", "lettuce", "broccoli", "carrot", "garlic", "ginger", "pepper", "mushroom", "berry", "lemon", "lime", "avocado", "cilantro", "coriander", "okra", "palak", "fruit", "veg", "salad", "watermelon", "strawberry", "blueberry", "melon", "cherry", "peach", "mango", "pineapple", "coconut", "kiwi", "eggplant", "corn", "cucumber", "beet"],
     "🥛 Dairy & Eggs": ["milk", "cheese", "egg", "butter", "yogurt", "yoghurt", "cream", "paneer", "dahi", "curd"],
     "🥩 Meat & Seafood": ["chicken", "beef", "pork", "fish", "salmon", "bacon", "sausage", "meat", "shrimp", "prawn", "turkey"],
     "🍞 Bakery": ["bread", "bun", "roll", "bagel", "muffin", "cake", "croissant", "pastry", "pita", "tortilla", "baguette", "pretzel", "pancake", "waffle"],
@@ -146,12 +146,13 @@ export default function App() {
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [categoryPrefs, setCategoryPrefs] = useState<Record<string, string>>({});
   const [storePrefs, setStorePrefs] = useState<Record<string, string>>({});
+  
+  // NEW: Memory bank for custom emojis
+  const [emojiPrefs, setEmojiPrefs] = useState<Record<string, string>>({});
+  
   const [categoryOrder, setCategoryOrder] = useState<string[]>(GROCERY_CATEGORIES);
   const [showStats, setShowStats] = useState(true);
-  
-  // --- UPDATED STATS VIEW STATE ---
   const [statView, setStatView] = useState<'items' | 'categories' | 'stores'>('items');
-  
   const [darkMode, setDarkMode] = useState(false);
   const [isBouncing, setIsBouncing] = useState(false);
   const [activeMenu, setActiveMenu] = useState<{id: string, type: 'category' | 'store'} | null>(null);
@@ -160,6 +161,7 @@ export default function App() {
     setItems(loadFromLocalStorage());
     if (localStorage.getItem('groceryCategoryPrefs')) setCategoryPrefs(JSON.parse(localStorage.getItem('groceryCategoryPrefs')!));
     if (localStorage.getItem('groceryStorePrefs')) setStorePrefs(JSON.parse(localStorage.getItem('groceryStorePrefs')!));
+    if (localStorage.getItem('groceryEmojiPrefs')) setEmojiPrefs(JSON.parse(localStorage.getItem('groceryEmojiPrefs')!));
     if (localStorage.getItem('groceryTheme') === 'dark') setDarkMode(true);
     if (localStorage.getItem('groceryCategoryOrder')) setCategoryOrder(Array.from(new Set([...JSON.parse(localStorage.getItem('groceryCategoryOrder')!), ...GROCERY_CATEGORIES])));
   }, []);
@@ -167,6 +169,7 @@ export default function App() {
   useEffect(() => { saveToLocalStorage(items); }, [items]);
   useEffect(() => { localStorage.setItem('groceryCategoryPrefs', JSON.stringify(categoryPrefs)); }, [categoryPrefs]);
   useEffect(() => { localStorage.setItem('groceryStorePrefs', JSON.stringify(storePrefs)); }, [storePrefs]);
+  useEffect(() => { localStorage.setItem('groceryEmojiPrefs', JSON.stringify(emojiPrefs)); }, [emojiPrefs]);
   useEffect(() => { localStorage.setItem('groceryTheme', darkMode ? 'dark' : 'light'); }, [darkMode]);
   useEffect(() => { localStorage.setItem('groceryCategoryOrder', JSON.stringify(categoryOrder)); }, [categoryOrder]);
 
@@ -180,31 +183,46 @@ export default function App() {
     }).slice(0, 5);
   }, [items]);
 
-  const handleAddItem = (name: string, manualCategory?: string, manualStore?: string, forceAdd = false) => {
-    const normName = normalizeName(name);
+  const handleAddItem = (rawInputName: string, manualCategory?: string, manualStore?: string, forceAdd = false) => {
+    if (!rawInputName.trim()) return;
+
+    // 1. Extract emojis using modern Unicode property escapes
+    const emojiRegex = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu;
+    const extractedEmojis = rawInputName.match(emojiRegex);
+    const customEmoji = extractedEmojis ? extractedEmojis.join('') : null;
+
+    // 2. Clean the name so we don't duplicate emojis, and normalize it for matching
+    const cleanName = rawInputName.replace(emojiRegex, '').trim();
+    if (!cleanName) return; // Prevent adding just an emoji with no text
+    const normName = normalizeName(cleanName);
+
     const existing = items.find(i => !i.isHistory && normalizeName(i.name) === normName);
     
     if (existing && !forceAdd) {
-      toast.error(`"${name}" is already here!`, { action: { label: "Add Anyway", onClick: () => handleAddItem(name, manualCategory, manualStore, true) } });
+      toast.error(`"${cleanName}" is already here!`, { action: { label: "Add Anyway", onClick: () => handleAddItem(rawInputName, manualCategory, manualStore, true) } });
       return;
     }
 
-    const emoji = EMOJI_MAP[normName] || "";
-    const displayName = emoji ? `${name} ${emoji}` : name;
+    // 3. Determine the final emoji (Custom override > Saved Preference > Default Emoji Map)
+    const finalEmoji = customEmoji || emojiPrefs[normName] || EMOJI_MAP[normName] || "";
+    const displayName = finalEmoji ? `${cleanName} ${finalEmoji}` : cleanName;
     
-    const finalCategory = manualCategory || categoryPrefs[normName] || getAutoCategory(name) || "📦 Other";
+    const finalCategory = manualCategory || categoryPrefs[normName] || getAutoCategory(cleanName) || "📦 Other";
     const finalStore = manualStore || storePrefs[normName] || "";
     const historyItem = items.find(i => i.isHistory && normalizeName(i.name) === normName);
     
     if (historyItem) {
-      setItems(prev => prev.map(i => i.id === historyItem.id ? { ...i, isHistory: false, checkedOut: false, category: finalCategory, store: finalStore } : i));
+      setItems(prev => prev.map(i => i.id === historyItem.id ? { ...i, name: displayName, isHistory: false, checkedOut: false, category: finalCategory, store: finalStore } : i));
     } else {
       setItems(prev => [{ id: Date.now().toString(), name: displayName, category: finalCategory, store: finalStore, purchaseCount: 0, purchaseDates: [], checkedOut: false, isHistory: false, addedAt: new Date().toISOString() }, ...prev]);
     }
     
+    // Save preferences
+    if (customEmoji) setEmojiPrefs(prev => ({ ...prev, [normName]: customEmoji }));
     if (manualCategory) setCategoryPrefs(prev => ({ ...prev, [normName]: manualCategory }));
     if (manualStore && manualStore !== "Any Store") setStorePrefs(prev => ({ ...prev, [normName]: manualStore }));
-    toast.success(`Added ${name}`);
+    
+    toast.success(`Added ${cleanName}`);
   };
 
   const handleCheckout = (id: string) => {
@@ -217,7 +235,7 @@ export default function App() {
     const newStorePrefs = { ...storePrefs };
     items.forEach(item => {
       if (item.checkedOut) {
-        const norm = normalizeName(item.name.replace(/[\u1000-\uFFFF]/g, '').trim());
+        const norm = normalizeName(item.name);
         if (item.category !== "📦 Other") newCatPrefs[norm] = item.category;
         if (item.store && item.store !== "Any Store") newStorePrefs[norm] = item.store;
       }
@@ -231,7 +249,7 @@ export default function App() {
   const handleUpdateCategory = (id: string, newCategory: string) => {
     setItems(prev => prev.map(i => {
       if (i.id === id) {
-        const norm = normalizeName(i.name.replace(/[\u1000-\uFFFF]/g, '').trim());
+        const norm = normalizeName(i.name);
         setCategoryPrefs(p => ({ ...p, [norm]: newCategory }));
         return { ...i, category: newCategory };
       }
@@ -242,7 +260,7 @@ export default function App() {
   const handleUpdateStore = (id: string, newStore: string) => {
     setItems(prev => prev.map(i => {
       if (i.id === id) {
-        const norm = normalizeName(i.name.replace(/[\u1000-\uFFFF]/g, '').trim());
+        const norm = normalizeName(i.name);
         if (newStore) {
           setStorePrefs(p => ({ ...p, [norm]: newStore }));
         }
@@ -290,7 +308,6 @@ export default function App() {
     return Object.entries(stats).map(([name, count]) => ({ name, count: count as number })).sort((a, b) => b.count - a.count);
   }, [items]);
 
-  // --- NEW: STORE DATA CALCULATION ---
   const storeData = React.useMemo(() => {
     const stats = items.reduce((acc, item) => {
       const count = item.purchaseDates?.length || item.purchaseCount || 0;
@@ -336,7 +353,7 @@ export default function App() {
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-3 flex items-center gap-2"><Sparkles className="w-3 h-3" /> Running Low?</h3>
                 <div className="flex flex-wrap gap-2">
                   {suggestions.map(item => (
-                    <button key={item.id} onClick={() => handleAddItem(item.name.replace(/[\u1000-\uFFFF]/g, '').trim())} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all hover:scale-105 active:scale-95 ${darkMode ? 'bg-slate-900 border-slate-700 hover:border-primary' : 'bg-white border-slate-200 hover:border-primary shadow-sm'}`}>
+                    <button key={item.id} onClick={() => handleAddItem(item.name)} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all hover:scale-105 active:scale-95 ${darkMode ? 'bg-slate-900 border-slate-700 hover:border-primary' : 'bg-white border-slate-200 hover:border-primary shadow-sm'}`}>
                       {item.name} <Plus className="w-3 h-3 text-primary" />
                     </button>
                   ))}
@@ -495,7 +512,7 @@ export default function App() {
                         {item.purchaseDates && item.purchaseDates.length > 0 ? getTimeAgo(item.purchaseDates[item.purchaseDates.length - 1]) : "Never purchased"}
                       </p>
                     </div>
-                    <button onClick={() => handleAddItem(item.name.replace(/[\u1000-\uFFFF]/g, '').trim(), undefined, undefined, true)} className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors"><RefreshCcw className="w-5 h-5" /></button>
+                    <button onClick={() => handleAddItem(item.name, undefined, undefined, true)} className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors"><RefreshCcw className="w-5 h-5" /></button>
                   </div>
                 )})}
                 
@@ -508,7 +525,6 @@ export default function App() {
             </Tabs>
           </div>
           
-          {/* --- UPDATED STATS SIDEBAR --- */}
           {showStats && (
             <div className="lg:col-span-1 space-y-4">
               <div className={`p-1 flex rounded-lg border shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
