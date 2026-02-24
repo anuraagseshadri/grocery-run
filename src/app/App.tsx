@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Package, CheckCheck, RefreshCcw, BarChart3, 
-  EyeOff, Trash2, Plus, ChevronUp, ChevronDown, PieChart, ListOrdered, Sparkles, RotateCcw, Moon, Sun, MapPin, Store, Leaf
+  EyeOff, Trash2, Plus, ChevronUp, ChevronDown, PieChart, ListOrdered, Sparkles, RotateCcw, Moon, Sun, MapPin, Store
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
-import { FrequencyStats } from './components/FrequencyStats';
+import { AddItemForm } from './components/AddItemForm';
 import { GroceryItem } from './types';
 import {
-  getItemStats,
   saveToLocalStorage,
   loadFromLocalStorage,
 } from './utils/groceryUtils';
@@ -142,96 +141,6 @@ const StoreLogo = ({ storeName, className = "" }: { storeName: string, className
   );
 };
 
-// --- NEW: THE SMART ADD FORM WITH HEALTHY SWAP LOGIC ---
-const HEALTHY_SWAPS: Record<string, { swap: string, reason: string, store: string }> = {
-  "chip": { swap: "Popcorn", reason: "Higher fiber, lower calorie", store: "FreshCo" },
-  "soda": { swap: "Sparkling Water", reason: "Zero sugar, stays fizzy", store: "Walmart" },
-  "pop": { swap: "Sparkling Water", reason: "Zero sugar, stays fizzy", store: "Walmart" },
-  "ice cream": { swap: "Greek Yogurt & Berries", reason: "High protein, natural sugars", store: "No Frills" },
-  "candy": { swap: "Dark Chocolate", reason: "Antioxidants & lower sugar", store: "SDM" },
-  "chocolate": { swap: "Dark Chocolate", reason: "Antioxidants & lower sugar", store: "SDM" },
-  "white bread": { swap: "Sourdough Bread", reason: "Gut-friendly, lower glycemic index", store: "Costco" },
-  "cereal": { swap: "Rolled Oats", reason: "Sustained energy, no added sugar", store: "Costco" }
-};
-
-const SmartAddForm = ({ onAddItem, darkMode }: { onAddItem: (name: string, category?: string, store?: string) => void, darkMode: boolean }) => {
-  const [input, setInput] = useState('');
-  const [suggestion, setSuggestion] = useState<{ original: string, swap: string, reason: string, store: string } | null>(null);
-
-  useEffect(() => {
-    const lowerInput = input.toLowerCase();
-    let foundMatch = null;
-    for (const [badItem, goodSwap] of Object.entries(HEALTHY_SWAPS)) {
-      if (lowerInput.includes(badItem) && lowerInput.length > 2) {
-        foundMatch = { original: badItem, ...goodSwap };
-        break;
-      }
-    }
-    setSuggestion(foundMatch);
-  }, [input]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (input.trim()) {
-      onAddItem(input);
-      setInput('');
-    }
-  };
-
-  const handleAcceptSwap = () => {
-    if (suggestion) {
-      onAddItem(suggestion.swap, undefined, suggestion.store);
-      setInput('');
-      toast.success("Great choice! Added to your list.");
-    }
-  };
-
-  return (
-    <div className="space-y-3">
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="What do you need?"
-          className={`flex-1 px-4 py-3 rounded-xl border font-medium text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 ${darkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'}`}
-        />
-        <button
-          type="submit"
-          disabled={!input.trim()}
-          className="px-6 py-3 bg-primary text-white font-bold rounded-xl text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
-        >
-          Add
-        </button>
-      </form>
-
-      {/* The Healthy Swap Nudge */}
-      {suggestion && (
-        <div className={`mt-2 p-3.5 rounded-xl border animate-in fade-in slide-in-from-top-2 duration-300 ${darkMode ? 'bg-green-950/30 border-green-900/50 text-green-300' : 'bg-green-50 border-green-200 text-green-800'}`}>
-          <div className="flex gap-3">
-            <div className={`p-2 rounded-full h-fit mt-0.5 ${darkMode ? 'bg-green-900/50' : 'bg-green-100'}`}>
-              <Leaf className="w-4 h-4 text-green-600 dark:text-green-400" />
-            </div>
-            <div className="flex-1">
-              <p className="font-black text-[10px] uppercase tracking-wider mb-1 opacity-80">Healthy Swap Idea</p>
-              <p className="text-xs mb-3 font-medium leading-relaxed">
-                Trade <span className="line-through opacity-70">{suggestion.original}</span> for <strong>{suggestion.swap}</strong>? <br/>
-                <span className="italic opacity-80">({suggestion.reason})</span>
-              </p>
-              <button 
-                onClick={handleAcceptSwap}
-                className="w-full sm:w-auto text-[11px] font-bold bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 active:scale-95 shadow-sm"
-              >
-                Add {suggestion.swap} <StoreLogo storeName={suggestion.store} className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 
 // --- 4. MAIN APP COMPONENT ---
 export default function App() {
@@ -242,6 +151,10 @@ export default function App() {
   const [categoryOrder, setCategoryOrder] = useState<string[]>(GROCERY_CATEGORIES);
   const [showStats, setShowStats] = useState(true);
   const [statView, setStatView] = useState<'items' | 'categories' | 'stores'>('items');
+  
+  // NEW: State to track which stat accordion is open
+  const [expandedStat, setExpandedStat] = useState<string | null>(null);
+
   const [darkMode, setDarkMode] = useState(false);
   const [isBouncing, setIsBouncing] = useState(false);
   const [activeMenu, setActiveMenu] = useState<{id: string, type: 'category' | 'store'} | null>(null);
@@ -384,25 +297,53 @@ export default function App() {
   const grouped = activeItems.reduce((acc, i) => { const cat = i.category || "📦 Other"; if (!acc[cat]) acc[cat] = []; acc[cat].push(i); return acc; }, {} as Record<string, GroceryItem[]>);
   const sortedCats = Object.keys(grouped).sort((a, b) => categoryOrder.indexOf(a) - categoryOrder.indexOf(b));
 
+  // --- NEW: CUSTOM TOP 15 ITEMS DATA ---
+  const topItemsData = React.useMemo(() => {
+    const stats = items.reduce((acc, item) => {
+      const count = item.purchaseDates?.length || item.purchaseCount || 0;
+      if (count > 0) {
+        acc[item.name] = (acc[item.name] || 0) + count;
+      }
+      return acc;
+    }, {} as Record<string, number>);
+    return Object.entries(stats)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15); // Expanded from 5 to 15!
+  }, [items]);
+
+  // --- UPDATED: CATEGORY DATA WITH ITEMS ARRAY FOR DRILL-DOWN ---
   const categoryData = React.useMemo(() => {
     const stats = items.reduce((acc, item) => {
       const count = item.purchaseDates?.length || item.purchaseCount || 0;
-      if (count > 0) { const cat = item.category || "📦 Other"; acc[cat] = (acc[cat] || 0) + count; }
+      if (count > 0) { 
+        const cat = item.category || "📦 Other"; 
+        if (!acc[cat]) acc[cat] = { count: 0, items: new Set<string>() };
+        acc[cat].count += count; 
+        acc[cat].items.add(item.name);
+      }
       return acc;
-    }, {} as Record<string, number>);
-    return Object.entries(stats).map(([name, count]) => ({ name, count: count as number })).sort((a, b) => b.count - a.count);
+    }, {} as Record<string, { count: number, items: Set<string> }>);
+    return Object.entries(stats)
+      .map(([name, data]) => ({ name, count: data.count, items: Array.from(data.items) }))
+      .sort((a, b) => b.count - a.count);
   }, [items]);
 
+  // --- UPDATED: STORE DATA WITH ITEMS ARRAY FOR DRILL-DOWN ---
   const storeData = React.useMemo(() => {
     const stats = items.reduce((acc, item) => {
       const count = item.purchaseDates?.length || item.purchaseCount || 0;
       if (count > 0) { 
         const st = item.store || "Unassigned"; 
-        acc[st] = (acc[st] || 0) + count; 
+        if (!acc[st]) acc[st] = { count: 0, items: new Set<string>() };
+        acc[st].count += count; 
+        acc[st].items.add(item.name);
       }
       return acc;
-    }, {} as Record<string, number>);
-    return Object.entries(stats).map(([name, count]) => ({ name, count: count as number })).sort((a, b) => b.count - a.count);
+    }, {} as Record<string, { count: number, items: Set<string> }>);
+    return Object.entries(stats)
+      .map(([name, data]) => ({ name, count: data.count, items: Array.from(data.items) }))
+      .sort((a, b) => b.count - a.count);
   }, [items]);
 
   return (
@@ -447,8 +388,7 @@ export default function App() {
             )}
 
             <div className={`rounded-xl border p-6 shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-card'}`}>
-              {/* REPLACED AddItemForm IMPORT WITH INLINE SMART FORM */}
-              <SmartAddForm onAddItem={(n, c, s) => handleAddItem(n, c, s)} darkMode={darkMode} />
+              <AddItemForm onAddItem={(n, c, s) => handleAddItem(n, c, s)} categories={categoryOrder} stores={PRESET_STORES} />
             </div>
 
             <Tabs defaultValue="active" className="w-full">
@@ -611,22 +551,46 @@ export default function App() {
             </Tabs>
           </div>
           
+          {/* --- STATS PANEL --- */}
           {showStats && (
             <div className="lg:col-span-1 space-y-4">
               <div className={`p-1 flex rounded-lg border shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
-                <button onClick={() => setStatView('items')} className={`flex items-center justify-center gap-1.5 flex-1 text-[10px] sm:text-xs font-bold py-2 rounded-md transition-all ${statView === 'items' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow' : 'bg-white text-primary shadow') : 'text-slate-400 hover:text-slate-600'}`}>
+                <button onClick={() => { setStatView('items'); setExpandedStat(null); }} className={`flex items-center justify-center gap-1.5 flex-1 text-[10px] sm:text-xs font-bold py-2 rounded-md transition-all ${statView === 'items' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow' : 'bg-white text-primary shadow') : 'text-slate-400 hover:text-slate-600'}`}>
                   <ListOrdered className="w-3.5 h-3.5" /> Items
                 </button>
-                <button onClick={() => setStatView('categories')} className={`flex items-center justify-center gap-1.5 flex-1 text-[10px] sm:text-xs font-bold py-2 rounded-md transition-all ${statView === 'categories' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow' : 'bg-white text-primary shadow') : 'text-slate-400 hover:text-slate-600'}`}>
+                <button onClick={() => { setStatView('categories'); setExpandedStat(null); }} className={`flex items-center justify-center gap-1.5 flex-1 text-[10px] sm:text-xs font-bold py-2 rounded-md transition-all ${statView === 'categories' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow' : 'bg-white text-primary shadow') : 'text-slate-400 hover:text-slate-600'}`}>
                   <PieChart className="w-3.5 h-3.5" /> Categories
                 </button>
-                <button onClick={() => setStatView('stores')} className={`flex items-center justify-center gap-1.5 flex-1 text-[10px] sm:text-xs font-bold py-2 rounded-md transition-all ${statView === 'stores' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow' : 'bg-white text-primary shadow') : 'text-slate-400 hover:text-slate-600'}`}>
+                <button onClick={() => { setStatView('stores'); setExpandedStat(null); }} className={`flex items-center justify-center gap-1.5 flex-1 text-[10px] sm:text-xs font-bold py-2 rounded-md transition-all ${statView === 'stores' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow' : 'bg-white text-primary shadow') : 'text-slate-400 hover:text-slate-600'}`}>
                   <Store className="w-3.5 h-3.5" /> Stores
                 </button>
               </div>
 
               {statView === 'items' ? (
-                <FrequencyStats data={getItemStats(items)} darkMode={darkMode} />
+                <div className={`rounded-xl border p-6 shadow-sm transition-all ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-card'}`}>
+                  <h3 className="font-black text-xs uppercase tracking-widest mb-6 opacity-80 flex items-center gap-2"><ListOrdered className="w-4 h-4 text-primary" /> Top 15 Items</h3>
+                  <div className="space-y-5">
+                    {topItemsData.length === 0 ? (
+                      <p className="text-xs opacity-50 text-center py-8 italic">No purchase history yet.</p>
+                    ) : (
+                      topItemsData.map((item, i) => {
+                        const max = topItemsData[0].count; 
+                        const percentage = Math.max(2, Math.round((item.count / max) * 100)); 
+                        return (
+                          <div key={item.name} className="space-y-1.5 group">
+                            <div className="flex justify-between text-[11px] font-bold">
+                              <span className="truncate pr-4 opacity-80 group-hover:opacity-100 transition-opacity">
+                                <span className="opacity-50 font-normal mr-1">{i + 1}.</span> {item.name}
+                              </span>
+                              <span className="opacity-60">{item.count}</span>
+                            </div>
+                            <div className={`h-2.5 w-full rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-hidden`}><div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }} /></div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
               ) : statView === 'categories' ? (
                 <div className={`rounded-xl border p-6 shadow-sm transition-all ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-card'}`}>
                   <h3 className="font-black text-xs uppercase tracking-widest mb-6 opacity-80 flex items-center gap-2"><PieChart className="w-4 h-4 text-primary" /> Category Breakdown</h3>
@@ -637,10 +601,28 @@ export default function App() {
                       categoryData.map((cat, i) => {
                         const max = categoryData[0].count; 
                         const percentage = Math.max(2, Math.round((cat.count / max) * 100)); 
+                        const isExpanded = expandedStat === cat.name;
                         return (
-                          <div key={cat.name} className="space-y-1.5 group">
-                            <div className="flex justify-between text-[11px] font-bold"><span className="truncate pr-4 opacity-80 group-hover:opacity-100 transition-opacity">{cat.name}</span><span className="opacity-60">{cat.count}</span></div>
+                          <div key={cat.name} className="space-y-1.5 group cursor-pointer" onClick={() => setExpandedStat(isExpanded ? null : cat.name)}>
+                            <div className="flex justify-between text-[11px] font-bold">
+                              <span className="flex items-center gap-1.5 truncate pr-4 opacity-80 group-hover:opacity-100 transition-opacity">
+                                <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180 text-primary' : 'opacity-40'}`} />
+                                {cat.name}
+                              </span>
+                              <span className="opacity-60">{cat.count}</span>
+                            </div>
                             <div className={`h-2.5 w-full rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-hidden`}><div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }} /></div>
+                            
+                            {/* Drill-down UI */}
+                            {isExpanded && (
+                              <div className={`pt-2 flex flex-wrap gap-1.5 animate-in fade-in slide-in-from-top-1`}>
+                                {cat.items.map(itemName => (
+                                  <span key={itemName} className={`text-[9px] px-2 py-1 rounded-md border font-semibold ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}>
+                                    {itemName}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )
                       })
@@ -657,16 +639,29 @@ export default function App() {
                       storeData.map((st, i) => {
                         const max = storeData[0].count; 
                         const percentage = Math.max(2, Math.round((st.count / max) * 100)); 
+                        const isExpanded = expandedStat === st.name;
                         return (
-                          <div key={st.name} className="space-y-1.5 group">
+                          <div key={st.name} className="space-y-1.5 group cursor-pointer" onClick={() => setExpandedStat(isExpanded ? null : st.name)}>
                             <div className="flex items-center justify-between text-[11px] font-bold">
                               <span className="flex items-center gap-1.5 truncate pr-4 opacity-80 group-hover:opacity-100 transition-opacity">
+                                <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180 text-primary' : 'opacity-40'}`} />
                                 {st.name !== "Unassigned" && <StoreLogo storeName={st.name} className="w-3 h-3" />}
                                 {st.name}
                               </span>
                               <span className="opacity-60">{st.count}</span>
                             </div>
                             <div className={`h-2.5 w-full rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-hidden`}><div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }} /></div>
+                            
+                            {/* Drill-down UI */}
+                            {isExpanded && (
+                              <div className={`pt-2 flex flex-wrap gap-1.5 animate-in fade-in slide-in-from-top-1`}>
+                                {st.items.map(itemName => (
+                                  <span key={itemName} className={`text-[9px] px-2 py-1 rounded-md border font-semibold ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}>
+                                    {itemName}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )
                       })
