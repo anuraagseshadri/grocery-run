@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Package, CheckCheck, RefreshCcw, BarChart3, 
-  EyeOff, Trash2, Plus, ChevronUp, ChevronDown, PieChart, ListOrdered, Sparkles, RotateCcw, Moon, Sun, MapPin, Store
+  EyeOff, Trash2, Plus, ChevronUp, ChevronDown, PieChart, ListOrdered, Sparkles, RotateCcw, Moon, Sun, MapPin, Store, Leaf
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
-import { AddItemForm } from './components/AddItemForm';
 import { FrequencyStats } from './components/FrequencyStats';
 import { GroceryItem } from './types';
 import {
@@ -35,7 +34,7 @@ const getAutoCategory = (name: string): string | null => {
     "🥬 Produce (Fruits & Veggies)": ["onion", "tomato", "potato", "apple", "banana", "orange", "grape", "spinach", "lettuce", "broccoli", "carrot", "garlic", "ginger", "pepper", "mushroom", "berry", "lemon", "lime", "avocado", "cilantro", "coriander", "okra", "palak", "fruit", "veg", "salad", "watermelon", "strawberry", "blueberry", "melon", "cherry", "peach", "mango", "pineapple", "coconut", "kiwi", "eggplant", "corn", "cucumber", "beet"],
     "🥛 Dairy & Eggs": ["milk", "cheese", "egg", "butter", "yogurt", "yoghurt", "cream", "paneer", "dahi", "curd"],
     "🥩 Meat & Seafood": ["chicken", "beef", "pork", "fish", "salmon", "bacon", "sausage", "meat", "shrimp", "prawn", "turkey"],
-    "🍞 Bakery": ["bread", "bun", "roll", "bagel", "muffin", "cake", "croissant", "pastry", "pita", "tortilla", "baguette", "pretzel", "pancake", "waffle"],
+    "🍞 Bakery": ["bread", "bun", "roll", "bagel", "muffin", "cake", "croissant", "pastry", "pita", "tortilla", "baguette", "pretzel", "pancake", "waffle", "sourdough"],
     "🥜 Nuts & Seeds": ["nut", "peanut", "almond", "cashew", "walnut", "pecan", "seed", "pistachio"],
     "🥫 Pantry": ["rice", "pasta", "noodle", "dal", "lentil", "flour", "atta", "sugar", "salt", "spice", "oil", "ghee", "vinegar", "sauce", "soup", "cereal", "oat", "honey", "jam", "peanut butter", "chana", "basmati", "bean", "can"],
     "❄️ Frozen Foods": ["pizza", "ice cream", "frozen", "popsicle"],
@@ -62,13 +61,13 @@ const EMOJI_MAP: Record<string, string> = {
   milk: "🥛", cheese: "🧀", egg: "🥚", butter: "🧈", yogurt: "🍦", curd: "🥣", dahi: "🥣", paneer: "🧀",
   chicken: "🍗", meat: "🥩", beef: "🥩", pork: "🥩", bacon: "🥓", fish: "🐟",
   salmon: "🍣", shrimp: "🦐", prawn: "🍤", turkey: "🦃", sausage: "🌭",
-  bread: "🍞", croissant: "🥐", baguette: "🥖", pretzel: "🥨", bagel: "🥯",
+  bread: "🍞", croissant: "🥐", baguette: "🥖", pretzel: "🥨", bagel: "🥯", sourdough: "🥖",
   pancake: "🥞", waffle: "🧇", bun: "🥯", roll: "🥐", pastry: "🥐", cake: "🍰",
   peanut: "🥜", nut: "🌰", almond: "🌰", cashew: "🌰", walnut: "🌰",
   rice: "🍚", pasta: "🍝", noodle: "🍜", dal: "🥣", lentil: "🥣", flour: "🌾",
   atta: "🌾", salt: "🧂", spice: "🌶️", oil: "🛢️", honey: "🍯", jam: "🍯",
   soup: "🍲", cereal: "🥣", can: "🥫", bean: "🫘", "peanut butter": "🥜",
-  pizza: "🍕", "ice cream": "🍨", frozen: "🧊", popsicle: "🍧", chip: "🍟",
+  pizza: "🍕", "ice cream": "🍨", frozen: "🧊", popsicle: "🍧", chip: "🍟", chips: "🍟",
   cookie: "🍪", cracker: "🍘", candy: "🍬", chocolate: "🍫", popcorn: "🍿",
   water: "💧", juice: "🧃", soda: "🥤", pop: "🥤", coffee: "☕", tea: "🍵",
   beer: "🍺", wine: "🍷", liquor: "🥃", drink: "🍹",
@@ -102,7 +101,6 @@ const getStoreColor = (storeName?: string) => {
   if (!storeName || storeName === "Any Store") {
     return { text: "text-slate-500 dark:text-slate-400", bg: "bg-slate-50 dark:bg-slate-800/50", border: "border-slate-200 dark:border-slate-700", badge: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" };
   }
-  // Handles legacy stores (like "Loblaws") that are no longer in the dictionary
   return STORE_COLORS[storeName] || { text: "text-slate-500 dark:text-slate-400", bg: "bg-slate-50 dark:bg-slate-800/50", border: "border-slate-200 dark:border-slate-700", badge: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" };
 };
 
@@ -144,15 +142,103 @@ const StoreLogo = ({ storeName, className = "" }: { storeName: string, className
   );
 };
 
+// --- NEW: THE SMART ADD FORM WITH HEALTHY SWAP LOGIC ---
+const HEALTHY_SWAPS: Record<string, { swap: string, reason: string, store: string }> = {
+  "chip": { swap: "Popcorn", reason: "Higher fiber, lower calorie", store: "FreshCo" },
+  "soda": { swap: "Sparkling Water", reason: "Zero sugar, stays fizzy", store: "Walmart" },
+  "pop": { swap: "Sparkling Water", reason: "Zero sugar, stays fizzy", store: "Walmart" },
+  "ice cream": { swap: "Greek Yogurt & Berries", reason: "High protein, natural sugars", store: "No Frills" },
+  "candy": { swap: "Dark Chocolate", reason: "Antioxidants & lower sugar", store: "SDM" },
+  "chocolate": { swap: "Dark Chocolate", reason: "Antioxidants & lower sugar", store: "SDM" },
+  "white bread": { swap: "Sourdough Bread", reason: "Gut-friendly, lower glycemic index", store: "Costco" },
+  "cereal": { swap: "Rolled Oats", reason: "Sustained energy, no added sugar", store: "Costco" }
+};
+
+const SmartAddForm = ({ onAddItem, darkMode }: { onAddItem: (name: string, category?: string, store?: string) => void, darkMode: boolean }) => {
+  const [input, setInput] = useState('');
+  const [suggestion, setSuggestion] = useState<{ original: string, swap: string, reason: string, store: string } | null>(null);
+
+  useEffect(() => {
+    const lowerInput = input.toLowerCase();
+    let foundMatch = null;
+    for (const [badItem, goodSwap] of Object.entries(HEALTHY_SWAPS)) {
+      if (lowerInput.includes(badItem) && lowerInput.length > 2) {
+        foundMatch = { original: badItem, ...goodSwap };
+        break;
+      }
+    }
+    setSuggestion(foundMatch);
+  }, [input]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (input.trim()) {
+      onAddItem(input);
+      setInput('');
+    }
+  };
+
+  const handleAcceptSwap = () => {
+    if (suggestion) {
+      onAddItem(suggestion.swap, undefined, suggestion.store);
+      setInput('');
+      toast.success("Great choice! Added to your list.");
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <form onSubmit={handleSubmit} className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="What do you need?"
+          className={`flex-1 px-4 py-3 rounded-xl border font-medium text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 ${darkMode ? 'bg-slate-900 border-slate-700 text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'}`}
+        />
+        <button
+          type="submit"
+          disabled={!input.trim()}
+          className="px-6 py-3 bg-primary text-white font-bold rounded-xl text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+        >
+          Add
+        </button>
+      </form>
+
+      {/* The Healthy Swap Nudge */}
+      {suggestion && (
+        <div className={`mt-2 p-3.5 rounded-xl border animate-in fade-in slide-in-from-top-2 duration-300 ${darkMode ? 'bg-green-950/30 border-green-900/50 text-green-300' : 'bg-green-50 border-green-200 text-green-800'}`}>
+          <div className="flex gap-3">
+            <div className={`p-2 rounded-full h-fit mt-0.5 ${darkMode ? 'bg-green-900/50' : 'bg-green-100'}`}>
+              <Leaf className="w-4 h-4 text-green-600 dark:text-green-400" />
+            </div>
+            <div className="flex-1">
+              <p className="font-black text-[10px] uppercase tracking-wider mb-1 opacity-80">Healthy Swap Idea</p>
+              <p className="text-xs mb-3 font-medium leading-relaxed">
+                Trade <span className="line-through opacity-70">{suggestion.original}</span> for <strong>{suggestion.swap}</strong>? <br/>
+                <span className="italic opacity-80">({suggestion.reason})</span>
+              </p>
+              <button 
+                onClick={handleAcceptSwap}
+                className="w-full sm:w-auto text-[11px] font-bold bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 active:scale-95 shadow-sm"
+              >
+                Add {suggestion.swap} <StoreLogo storeName={suggestion.store} className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 // --- 4. MAIN APP COMPONENT ---
 export default function App() {
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [categoryPrefs, setCategoryPrefs] = useState<Record<string, string>>({});
   const [storePrefs, setStorePrefs] = useState<Record<string, string>>({});
-  
-  // Memory bank for custom emojis
   const [emojiPrefs, setEmojiPrefs] = useState<Record<string, string>>({});
-  
   const [categoryOrder, setCategoryOrder] = useState<string[]>(GROCERY_CATEGORIES);
   const [showStats, setShowStats] = useState(true);
   const [statView, setStatView] = useState<'items' | 'categories' | 'stores'>('items');
@@ -166,7 +252,6 @@ export default function App() {
     if (localStorage.getItem('groceryStorePrefs')) setStorePrefs(JSON.parse(localStorage.getItem('groceryStorePrefs')!));
     if (localStorage.getItem('groceryEmojiPrefs')) setEmojiPrefs(JSON.parse(localStorage.getItem('groceryEmojiPrefs')!));
     if (localStorage.getItem('groceryTheme') === 'dark') setDarkMode(true);
-    // Safely appends the new Health & Pharmacy category to the bottom of the user's existing layout
     if (localStorage.getItem('groceryCategoryOrder')) setCategoryOrder(Array.from(new Set([...JSON.parse(localStorage.getItem('groceryCategoryOrder')!), ...GROCERY_CATEGORIES])));
   }, []);
 
@@ -362,7 +447,8 @@ export default function App() {
             )}
 
             <div className={`rounded-xl border p-6 shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-card'}`}>
-              <AddItemForm onAddItem={(n, c, s) => handleAddItem(n, c, s)} categories={categoryOrder} stores={PRESET_STORES} />
+              {/* REPLACED AddItemForm IMPORT WITH INLINE SMART FORM */}
+              <SmartAddForm onAddItem={(n, c, s) => handleAddItem(n, c, s)} darkMode={darkMode} />
             </div>
 
             <Tabs defaultValue="active" className="w-full">
