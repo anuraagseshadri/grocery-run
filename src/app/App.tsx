@@ -34,8 +34,9 @@ const getAutoCategory = (name: string): string | null => {
     "🥛 Dairy & Eggs": ["milk", "cheese", "egg", "butter", "yogurt", "yoghurt", "cream", "paneer", "dahi", "curd"],
     "🥩 Meat & Seafood": ["chicken", "beef", "pork", "fish", "salmon", "bacon", "sausage", "meat", "shrimp", "prawn", "turkey"],
     "🍞 Bakery": ["bread", "bun", "roll", "bagel", "muffin", "cake", "croissant", "pastry", "pita", "tortilla", "baguette", "pretzel", "pancake", "waffle", "sourdough"],
+    "🍝 Pasta & Grains": ["pasta", "noodle", "spaghetti", "macaroni", "penne", "fusilli", "ramen", "maggi", "lasagna", "sauce", "marinara", "alfredo", "pesto"],
     "🥜 Nuts & Seeds": ["nut", "peanut", "almond", "cashew", "walnut", "pecan", "seed", "pistachio"],
-    "🥫 Pantry": ["rice", "pasta", "noodle", "dal", "lentil", "flour", "atta", "sugar", "salt", "spice", "oil", "ghee", "vinegar", "sauce", "soup", "cereal", "oat", "honey", "jam", "peanut butter", "chana", "basmati", "bean", "can"],
+    "🥫 Pantry": ["rice", "dal", "lentil", "flour", "atta", "sugar", "salt", "spice", "oil", "ghee", "vinegar", "cereal", "oat", "honey", "jam", "peanut butter", "chana", "basmati", "bean", "can", "soup"],
     "❄️ Frozen Foods": ["pizza", "ice cream", "frozen", "popsicle"],
     "🍿 Snacks & Candy": ["chip", "cookie", "cracker", "candy", "chocolate", "popcorn", "snack", "gum"],
     "🥤 Beverages & Coffee": ["water", "juice", "soda", "pop", "coffee", "tea", "beer", "wine", "liquor", "drink"],
@@ -63,7 +64,8 @@ const EMOJI_MAP: Record<string, string> = {
   bread: "🍞", croissant: "🥐", baguette: "🥖", pretzel: "🥨", bagel: "🥯", sourdough: "🥖",
   pancake: "🥞", waffle: "🧇", bun: "🥯", roll: "🥐", pastry: "🥐", cake: "🍰",
   peanut: "🥜", nut: "🌰", almond: "🌰", cashew: "🌰", walnut: "🌰",
-  rice: "🍚", pasta: "🍝", noodle: "🍜", dal: "🥣", lentil: "🥣", flour: "🌾",
+  pasta: "🍝", noodle: "🍜", spaghetti: "🍝", ramen: "🍜", "pasta sauce": "🥫", sauce: "🥫",
+  rice: "🍚", dal: "🥣", lentil: "🥣", flour: "🌾",
   atta: "🌾", salt: "🧂", spice: "🌶️", oil: "🛢️", honey: "🍯", jam: "🍯",
   soup: "🍲", cereal: "🥣", can: "🥫", bean: "🫘", "peanut butter": "🥜",
   pizza: "🍕", "ice cream": "🍨", frozen: "🧊", popsicle: "🍧", chip: "🍟", chips: "🍟",
@@ -75,7 +77,7 @@ const EMOJI_MAP: Record<string, string> = {
   pill: "💊", tablet: "💊", medicine: "💊", vitamin: "💊", tylenol: "💊", advil: "💊"
 };
 
-const GROCERY_CATEGORIES = ["🥬 Produce (Fruits & Veggies)", "🥛 Dairy & Eggs", "🥩 Meat & Seafood", "🍞 Bakery", "🥜 Nuts & Seeds", "🥫 Pantry", "❄️ Frozen Foods", "🍿 Snacks & Candy", "🥤 Beverages & Coffee", "🧼 Household & Cleaning", "🧴 Personal & Pet Care", "💊 Health & Pharmacy", "👶 Baby", "📦 Other"];
+const GROCERY_CATEGORIES = ["🥬 Produce (Fruits & Veggies)", "🥛 Dairy & Eggs", "🥩 Meat & Seafood", "🍞 Bakery", "🍝 Pasta & Grains", "🥜 Nuts & Seeds", "🥫 Pantry", "❄️ Frozen Foods", "🍿 Snacks & Candy", "🥤 Beverages & Coffee", "🧼 Household & Cleaning", "🧴 Personal & Pet Care", "💊 Health & Pharmacy", "👶 Baby", "📦 Other"];
 const PRESET_STORES = ["Costco", "FreshCo", "No Frills", "Walmart", "SDM", "Other"];
 
 // --- 3. BRAND COLOR MAPPING & LOGO DOMAINS ---
@@ -151,10 +153,8 @@ export default function App() {
   const [categoryOrder, setCategoryOrder] = useState<string[]>(GROCERY_CATEGORIES);
   const [showStats, setShowStats] = useState(true);
   const [statView, setStatView] = useState<'items' | 'categories' | 'stores'>('items');
-  
-  // NEW: State to track which stat accordion is open
   const [expandedStat, setExpandedStat] = useState<string | null>(null);
-
+  const [showAllItems, setShowAllItems] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [isBouncing, setIsBouncing] = useState(false);
   const [activeMenu, setActiveMenu] = useState<{id: string, type: 'category' | 'store'} | null>(null);
@@ -297,8 +297,7 @@ export default function App() {
   const grouped = activeItems.reduce((acc, i) => { const cat = i.category || "📦 Other"; if (!acc[cat]) acc[cat] = []; acc[cat].push(i); return acc; }, {} as Record<string, GroceryItem[]>);
   const sortedCats = Object.keys(grouped).sort((a, b) => categoryOrder.indexOf(a) - categoryOrder.indexOf(b));
 
-  // --- NEW: CUSTOM TOP 15 ITEMS DATA ---
-  const topItemsData = React.useMemo(() => {
+  const allItemsData = React.useMemo(() => {
     const stats = items.reduce((acc, item) => {
       const count = item.purchaseDates?.length || item.purchaseCount || 0;
       if (count > 0) {
@@ -308,11 +307,9 @@ export default function App() {
     }, {} as Record<string, number>);
     return Object.entries(stats)
       .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 15); // Expanded from 5 to 15!
+      .sort((a, b) => b.count - a.count);
   }, [items]);
 
-  // --- UPDATED: CATEGORY DATA WITH ITEMS ARRAY FOR DRILL-DOWN ---
   const categoryData = React.useMemo(() => {
     const stats = items.reduce((acc, item) => {
       const count = item.purchaseDates?.length || item.purchaseCount || 0;
@@ -329,7 +326,6 @@ export default function App() {
       .sort((a, b) => b.count - a.count);
   }, [items]);
 
-  // --- UPDATED: STORE DATA WITH ITEMS ARRAY FOR DRILL-DOWN ---
   const storeData = React.useMemo(() => {
     const stats = items.reduce((acc, item) => {
       const count = item.purchaseDates?.length || item.purchaseCount || 0;
@@ -345,6 +341,8 @@ export default function App() {
       .map(([name, data]) => ({ name, count: data.count, items: Array.from(data.items) }))
       .sort((a, b) => b.count - a.count);
   }, [items]);
+
+  const displayedItems = showAllItems ? allItemsData : allItemsData.slice(0, 15);
 
   return (
     <div className={`min-h-screen p-4 sm:p-6 lg:p-8 flex flex-col transition-colors duration-300 ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-background text-foreground'}`}>
@@ -568,26 +566,40 @@ export default function App() {
 
               {statView === 'items' ? (
                 <div className={`rounded-xl border p-6 shadow-sm transition-all ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-card'}`}>
-                  <h3 className="font-black text-xs uppercase tracking-widest mb-6 opacity-80 flex items-center gap-2"><ListOrdered className="w-4 h-4 text-primary" /> Top 15 Items</h3>
+                  <h3 className="font-black text-xs uppercase tracking-widest mb-6 opacity-80 flex items-center justify-between">
+                    <span className="flex items-center gap-2"><ListOrdered className="w-4 h-4 text-primary" /> Purchase Habits</span>
+                  </h3>
                   <div className="space-y-5">
-                    {topItemsData.length === 0 ? (
+                    {displayedItems.length === 0 ? (
                       <p className="text-xs opacity-50 text-center py-8 italic">No purchase history yet.</p>
                     ) : (
-                      topItemsData.map((item, i) => {
-                        const max = topItemsData[0].count; 
-                        const percentage = Math.max(2, Math.round((item.count / max) * 100)); 
-                        return (
-                          <div key={item.name} className="space-y-1.5 group">
-                            <div className="flex justify-between text-[11px] font-bold">
-                              <span className="truncate pr-4 opacity-80 group-hover:opacity-100 transition-opacity">
-                                <span className="opacity-50 font-normal mr-1">{i + 1}.</span> {item.name}
-                              </span>
-                              <span className="opacity-60">{item.count}</span>
+                      <>
+                        {displayedItems.map((item, i) => {
+                          const max = allItemsData[0].count; 
+                          const percentage = Math.max(2, Math.round((item.count / max) * 100)); 
+                          return (
+                            <div key={item.name} className="space-y-1.5 group">
+                              <div className="flex justify-between text-[11px] font-bold">
+                                <span className="truncate pr-4 opacity-80 group-hover:opacity-100 transition-opacity">
+                                  <span className="opacity-50 font-normal mr-1">{i + 1}.</span> {item.name}
+                                </span>
+                                <span className="opacity-60">{item.count}</span>
+                              </div>
+                              <div className={`h-2.5 w-full rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-hidden`}><div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }} /></div>
                             </div>
-                            <div className={`h-2.5 w-full rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-hidden`}><div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }} /></div>
+                          )
+                        })}
+                        {allItemsData.length > 15 && (
+                          <div className="pt-4 border-t border-dashed border-slate-200 dark:border-slate-800 text-center">
+                            <button 
+                              onClick={() => setShowAllItems(!showAllItems)}
+                              className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-primary transition-colors"
+                            >
+                              {showAllItems ? "Show Less" : `Show All (${allItemsData.length})`}
+                            </button>
                           </div>
-                        )
-                      })
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -613,7 +625,6 @@ export default function App() {
                             </div>
                             <div className={`h-2.5 w-full rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-hidden`}><div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }} /></div>
                             
-                            {/* Drill-down UI */}
                             {isExpanded && (
                               <div className={`pt-2 flex flex-wrap gap-1.5 animate-in fade-in slide-in-from-top-1`}>
                                 {cat.items.map(itemName => (
@@ -652,7 +663,6 @@ export default function App() {
                             </div>
                             <div className={`h-2.5 w-full rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-hidden`}><div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }} /></div>
                             
-                            {/* Drill-down UI */}
                             {isExpanded && (
                               <div className={`pt-2 flex flex-wrap gap-1.5 animate-in fade-in slide-in-from-top-1`}>
                                 {st.items.map(itemName => (
