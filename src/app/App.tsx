@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Package, CheckCheck, RefreshCcw, BarChart3, 
-  EyeOff, Trash2, Plus, ChevronUp, ChevronDown, PieChart, ListOrdered, Sparkles, RotateCcw, Moon, Sun, MapPin, Store
+  EyeOff, Trash2, Plus, ChevronUp, ChevronDown, PieChart, ListOrdered, Sparkles, RotateCcw, Moon, Sun, MapPin, Store, History
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -52,29 +52,11 @@ const getAutoCategory = (name: string): string | null => {
 };
 
 const EMOJI_MAP: Record<string, string> = {
-  apple: "🍎", "green apple": "🍏", banana: "🍌", orange: "🍊", lemon: "🍋", lime: "🍈",
-  watermelon: "🍉", grape: "🍇", strawberry: "🍓", blueberry: "🫐", melon: "🍈", cherry: "🍒",
-  peach: "🍑", mango: "🥭", pineapple: "🍍", coconut: "🥥", kiwi: "🥝", tomato: "🍅",
-  eggplant: "🍆", potato: "🥔", carrot: "🥕", corn: "🌽", pepper: "🌶️", "bell pepper": "🫑",
-  cucumber: "🥒", lettuce: "🥬", spinach: "🥬", broccoli: "🥦", garlic: "🧄", onion: "🧅",
-  mushroom: "🍄", ginger: "🫚", okra: "🎋", palak: "🥬", cilantro: "🌿", coriander: "🌿",
-  milk: "🥛", cheese: "🧀", egg: "🥚", butter: "🧈", yogurt: "🍦", curd: "🥣", dahi: "🥣", paneer: "🧀",
-  chicken: "🍗", meat: "🥩", beef: "🥩", pork: "🥩", bacon: "🥓", fish: "🐟",
-  salmon: "🍣", shrimp: "🦐", prawn: "🍤", turkey: "🦃", sausage: "🌭",
-  bread: "🍞", croissant: "🥐", baguette: "🥖", pretzel: "🥨", bagel: "🥯", sourdough: "🥖",
-  pancake: "🥞", waffle: "🧇", bun: "🥯", roll: "🥐", pastry: "🥐", cake: "🍰",
-  peanut: "🥜", nut: "🌰", almond: "🌰", cashew: "🌰", walnut: "🌰",
-  pasta: "🍝", noodle: "🍜", spaghetti: "🍝", ramen: "🍜", "pasta sauce": "🥫", sauce: "🥫",
-  rice: "🍚", dal: "🥣", lentil: "🥣", flour: "🌾",
-  atta: "🌾", salt: "🧂", spice: "🌶️", oil: "🛢️", honey: "🍯", jam: "🍯",
-  soup: "🍲", cereal: "🥣", can: "🥫", bean: "🫘", "peanut butter": "🥜",
-  pizza: "🍕", "ice cream": "🍨", frozen: "🧊", popsicle: "🍧", chip: "🍟", chips: "🍟",
-  cookie: "🍪", cracker: "🍘", candy: "🍬", chocolate: "🍫", popcorn: "🍿",
-  water: "💧", juice: "🧃", soda: "🥤", pop: "🥤", coffee: "☕", tea: "🍵",
-  beer: "🍺", wine: "🍷", liquor: "🥃", drink: "🍹",
-  "paper towel": "🧻", "toilet paper": "🧻", soap: "🧼", sponge: "🧽",
-  diaper: "🧷", formula: "🍼", wipe: "🧻", pet: "🐕", dog: "🐕", cat: "🐈", toothpaste: "🪥",
-  pill: "💊", tablet: "💊", medicine: "💊", vitamin: "💊", tylenol: "💊", advil: "💊"
+  apple: "🍎", banana: "🍌", orange: "🍊", lemon: "🍋", watermelon: "🍉", grape: "🍇", strawberry: "🍓",
+  milk: "🥛", cheese: "🧀", egg: "🥚", butter: "🧈", yogurt: "🍦",
+  chicken: "🍗", meat: "🥩", fish: "🐟",
+  bread: "🍞", pasta: "🍝", noodle: "🍜", rice: "🍚",
+  pill: "💊", vitamin: "💊", diaper: "🧷"
 };
 
 const GROCERY_CATEGORIES = ["🥬 Produce (Fruits & Veggies)", "🥛 Dairy & Eggs", "🥩 Meat & Seafood", "🍞 Bakery", "🍝 Pasta & Grains", "🥜 Nuts & Seeds", "🥫 Pantry", "❄️ Frozen Foods", "🍿 Snacks & Candy", "🥤 Beverages & Coffee", "🧼 Household & Cleaning", "🧴 Personal & Pet Care", "💊 Health & Pharmacy", "👶 Baby", "📦 Other"];
@@ -82,11 +64,7 @@ const PRESET_STORES = ["Costco", "FreshCo", "No Frills", "Walmart", "SDM", "Othe
 
 // --- 3. BRAND COLOR MAPPING & LOGO DOMAINS ---
 const STORE_DOMAINS: Record<string, string> = {
-  "Costco": "costco.ca",
-  "FreshCo": "freshco.com",
-  "No Frills": "nofrills.ca",
-  "Walmart": "walmart.ca",
-  "SDM": "shoppersdrugmart.ca"
+  "Costco": "costco.ca", "FreshCo": "freshco.com", "No Frills": "nofrills.ca", "Walmart": "walmart.ca", "SDM": "shoppersdrugmart.ca"
 };
 
 const STORE_COLORS: Record<string, { text: string, bg: string, border: string, badge: string }> = {
@@ -114,31 +92,26 @@ const normalizeName = (name: string) => {
   return clean;
 };
 
-const getTimeAgo = (dateString: string) => {
-  if (!dateString) return "Never purchased";
+// --- REFINED TIME AGO FUNCTION ---
+const getTimeAgo = (dateString: string | undefined) => {
+  if (!dateString) return "First time purchase";
   const diffDays = Math.floor((new Date().getTime() - new Date(dateString).getTime()) / (1000 * 60 * 60 * 24));
   if (diffDays === 0) return "Purchased today";
   if (diffDays === 1) return "Purchased yesterday";
   if (diffDays < 7) return `Purchased ${diffDays} days ago`;
   if (diffDays < 30) return `Purchased ${Math.floor(diffDays / 7)} weeks ago`;
-  if (diffDays < 365) return `Purchased ${Math.floor(diffDays / 30)} months ago`;
-  return `Purchased ${Math.floor(diffDays / 365)} years ago`;
+  return `Purchased ${Math.floor(diffDays / 30)} months ago`;
 };
 
 // --- LOGO COMPONENT ---
 const StoreLogo = ({ storeName, className = "" }: { storeName: string, className?: string }) => {
   const domain = STORE_DOMAINS[storeName];
   if (!domain) return <MapPin className={`w-3 h-3 flex-shrink-0 ${className}`} />;
-  
   return (
     <img 
       src={`https://www.google.com/s2/favicons?sz=64&domain=${domain}`} 
       alt={`${storeName} logo`} 
       className={`w-3.5 h-3.5 rounded-full bg-white p-[1px] object-contain flex-shrink-0 ${className}`} 
-      onError={(e) => {
-        e.currentTarget.style.display = 'none';
-        e.currentTarget.parentElement?.insertAdjacentHTML('beforeend', `<svg class="w-3 h-3 ${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`);
-      }}
     />
   );
 };
@@ -187,39 +160,30 @@ export default function App() {
 
   const handleAddItem = (rawInputName: string, manualCategory?: string, manualStore?: string, forceAdd = false) => {
     if (!rawInputName.trim()) return;
-
     const emojiRegex = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu;
     const extractedEmojis = rawInputName.match(emojiRegex);
     const customEmoji = extractedEmojis ? extractedEmojis.join('') : null;
-
     const cleanName = rawInputName.replace(emojiRegex, '').trim();
     if (!cleanName) return; 
     const normName = normalizeName(cleanName);
-
     const existing = items.find(i => !i.isHistory && normalizeName(i.name) === normName);
-    
     if (existing && !forceAdd) {
       toast.error(`"${cleanName}" is already here!`, { action: { label: "Add Anyway", onClick: () => handleAddItem(rawInputName, manualCategory, manualStore, true) } });
       return;
     }
-
     const finalEmoji = customEmoji || emojiPrefs[normName] || EMOJI_MAP[normName] || "";
     const displayName = finalEmoji ? `${cleanName} ${finalEmoji}` : cleanName;
-    
     const finalCategory = manualCategory || categoryPrefs[normName] || getAutoCategory(cleanName) || "📦 Other";
     const finalStore = manualStore || storePrefs[normName] || "";
     const historyItem = items.find(i => i.isHistory && normalizeName(i.name) === normName);
-    
     if (historyItem) {
       setItems(prev => prev.map(i => i.id === historyItem.id ? { ...i, name: displayName, isHistory: false, checkedOut: false, category: finalCategory, store: finalStore } : i));
     } else {
       setItems(prev => [{ id: Date.now().toString(), name: displayName, category: finalCategory, store: finalStore, purchaseCount: 0, purchaseDates: [], checkedOut: false, isHistory: false, addedAt: new Date().toISOString() }, ...prev]);
     }
-    
     if (customEmoji) setEmojiPrefs(prev => ({ ...prev, [normName]: customEmoji }));
     if (manualCategory) setCategoryPrefs(prev => ({ ...prev, [normName]: manualCategory }));
     if (manualStore && manualStore !== "Any Store") setStorePrefs(prev => ({ ...prev, [normName]: manualStore }));
-    
     toast.success(`Added ${cleanName}`);
   };
 
@@ -229,56 +193,22 @@ export default function App() {
   };
 
   const handleCompleteTrip = () => {
-    const newCatPrefs = { ...categoryPrefs };
-    const newStorePrefs = { ...storePrefs };
-    items.forEach(item => {
-      if (item.checkedOut) {
-        const norm = normalizeName(item.name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim());
-        if (item.category !== "📦 Other") newCatPrefs[norm] = item.category;
-        if (item.store && item.store !== "Any Store") newStorePrefs[norm] = item.store;
-      }
-    });
-    setCategoryPrefs(newCatPrefs);
-    setStorePrefs(newStorePrefs);
     setItems(prev => prev.map(i => i.checkedOut ? { ...i, checkedOut: false, isHistory: true } : i));
     toast.success(`Trip completed!`);
   };
 
   const handleUpdateCategory = (id: string, newCategory: string) => {
-    setItems(prev => prev.map(i => {
-      if (i.id === id) {
-        const norm = normalizeName(i.name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim());
-        setCategoryPrefs(p => ({ ...p, [norm]: newCategory }));
-        return { ...i, category: newCategory };
-      }
-      return i;
-    }));
+    setItems(prev => prev.map(i => i.id === id ? { ...i, category: newCategory } : i));
   };
 
   const handleUpdateStore = (id: string, newStore: string) => {
-    setItems(prev => prev.map(i => {
-      if (i.id === id) {
-        const norm = normalizeName(i.name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim());
-        if (newStore) {
-          setStorePrefs(p => ({ ...p, [norm]: newStore }));
-        }
-        return { ...i, store: newStore };
-      }
-      return i;
-    }));
+    setItems(prev => prev.map(i => i.id === id ? { ...i, store: newStore } : i));
   };
 
   const handleClearList = () => {
-    if (window.confirm("Remove all unchecked items from your list?")) {
+    if (window.confirm("Remove all unchecked items?")) {
       setItems(prev => prev.filter(i => i.isHistory || i.checkedOut));
       toast.success("List cleared.");
-    }
-  };
-
-  const handleRefreshHabits = () => {
-    if (window.confirm("Start fresh? This will clear all your shopping history and reset your analytics, but your custom categories will be saved.")) {
-      setItems(prev => prev.filter(i => !i.isHistory).map(i => ({ ...i, purchaseCount: 0, purchaseDates: [] })));
-      toast.success("Habits and statistics refreshed!");
     }
   };
 
@@ -300,14 +230,10 @@ export default function App() {
   const allItemsData = React.useMemo(() => {
     const stats = items.reduce((acc, item) => {
       const count = item.purchaseDates?.length || item.purchaseCount || 0;
-      if (count > 0) {
-        acc[item.name] = (acc[item.name] || 0) + count;
-      }
+      if (count > 0) acc[item.name] = (acc[item.name] || 0) + count;
       return acc;
     }, {} as Record<string, number>);
-    return Object.entries(stats)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
+    return Object.entries(stats).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
   }, [items]);
 
   const categoryData = React.useMemo(() => {
@@ -321,9 +247,7 @@ export default function App() {
       }
       return acc;
     }, {} as Record<string, { count: number, items: Set<string> }>);
-    return Object.entries(stats)
-      .map(([name, data]) => ({ name, count: data.count, items: Array.from(data.items) }))
-      .sort((a, b) => b.count - a.count);
+    return Object.entries(stats).map(([name, data]) => ({ name, count: data.count, items: Array.from(data.items) })).sort((a, b) => b.count - a.count);
   }, [items]);
 
   const storeData = React.useMemo(() => {
@@ -337,9 +261,7 @@ export default function App() {
       }
       return acc;
     }, {} as Record<string, { count: number, items: Set<string> }>);
-    return Object.entries(stats)
-      .map(([name, data]) => ({ name, count: data.count, items: Array.from(data.items) }))
-      .sort((a, b) => b.count - a.count);
+    return Object.entries(stats).map(([name, data]) => ({ name, count: data.count, items: Array.from(data.items) })).sort((a, b) => b.count - a.count);
   }, [items]);
 
   const displayedItems = showAllItems ? allItemsData : allItemsData.slice(0, 15);
@@ -408,8 +330,8 @@ export default function App() {
                           {cat} <span className="font-normal bg-muted px-2 py-0.5 rounded-full">{grouped[cat].length}</span>
                         </h3>
                         <div className="flex gap-1">
-                          <button onClick={() => moveCategoryUp(cat)} className={`p-1 rounded transition-colors ${darkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-200'}`}><ChevronUp className="w-3.5 h-3.5 opacity-50 hover:opacity-100" /></button>
-                          <button onClick={() => moveCategoryDown(cat)} className={`p-1 rounded transition-colors ${darkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-200'}`}><ChevronDown className="w-3.5 h-3.5 opacity-50 hover:opacity-100" /></button>
+                          <button onClick={() => moveCategoryUp(cat)} className="p-1"><ChevronUp className="w-3.5 h-3.5 opacity-50 hover:opacity-100" /></button>
+                          <button onClick={() => moveCategoryDown(cat)} className="p-1"><ChevronDown className="w-3.5 h-3.5 opacity-50 hover:opacity-100" /></button>
                         </div>
                       </div>
 
@@ -418,97 +340,61 @@ export default function App() {
                           const isStoreMenu = activeMenu?.id === item.id && activeMenu.type === 'store';
                           const hasStoreAssigned = Boolean(item.store && item.store !== "Any Store");
                           const storeColors = getStoreColor(item.store);
+                          const lastDate = item.purchaseDates?.[item.purchaseDates.length - 1];
                           
                           return (
-                          <div key={item.id} className={`flex flex-col p-4 border rounded-xl shadow-sm transition-all ${darkMode ? 'bg-slate-900 border-slate-800 active:bg-slate-800' : 'bg-white active:bg-slate-50'}`}>
-                            
+                          <div key={item.id} className={`flex flex-col p-4 border rounded-xl shadow-sm transition-all ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white'}`}>
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3 overflow-hidden flex-1">
-                                <button onClick={(e) => { e.stopPropagation(); handleCheckout(item.id); }} className="p-1 rounded-full border-2 border-primary/20 text-transparent hover:text-primary transition-colors"><CheckCheck className="w-4 h-4"/></button>
-                                <span className="font-semibold text-[13px] truncate">{item.name}</span>
+                                <button onClick={() => handleCheckout(item.id)} className="p-1 rounded-full border-2 border-primary/20 text-transparent hover:text-primary"><CheckCheck className="w-4 h-4"/></button>
+                                <div>
+                                  <span className="font-semibold text-[13px] truncate block">{item.name}</span>
+                                  {/* --- DYNAMIC LAST PURCHASED MSG --- */}
+                                  <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                                    <History className="w-2.5 h-2.5" /> {getTimeAgo(lastDate)}
+                                  </span>
+                                </div>
                               </div>
-                              <button onClick={(e) => { e.stopPropagation(); setItems(items.filter(i => i.id !== item.id)); }} className="p-2 text-red-400 opacity-100 lg:opacity-0 lg:group-hover:opacity-100"><Trash2 className="w-5 h-5" /></button>
+                              <button onClick={() => setItems(items.filter(i => i.id !== item.id))} className="p-2 text-red-400 lg:opacity-0 hover:opacity-100"><Trash2 className="w-5 h-5" /></button>
                             </div>
                             
                             <div className="flex gap-2 mt-2">
-                              {/* Category Button */}
-                              <button 
-                                onClick={() => setActiveMenu(activeMenu?.id === item.id && activeMenu.type === 'category' ? null : {id: item.id, type: 'category'})}
-                                className={`flex-1 flex items-center justify-between px-3 py-2 rounded-lg text-[9px] font-bold uppercase transition-colors border ${activeMenu?.id === item.id && activeMenu.type === 'category' ? 'bg-primary/10 text-primary border-primary/20' : darkMode ? 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
-                              >
-                                <span className="truncate pr-2">{item.category}</span>
-                                <ChevronDown className={`w-3 h-3 transition-transform flex-shrink-0 ${activeMenu?.id === item.id && activeMenu.type === 'category' ? 'rotate-180' : ''}`} />
+                              <button onClick={() => setActiveMenu(activeMenu?.id === item.id && activeMenu.type === 'category' ? null : {id: item.id, type: 'category'})} className={`flex-1 px-3 py-2 rounded-lg text-[9px] font-bold uppercase border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                                {item.category}
                               </button>
-                              
-                              {/* Store Button */}
-                              <button 
-                                onClick={() => setActiveMenu(isStoreMenu ? null : {id: item.id, type: 'store'})}
-                                className={`flex-1 flex items-center justify-between px-3 py-2 rounded-lg text-[9px] font-bold uppercase transition-all border ${isStoreMenu ? `${storeColors.bg} ${storeColors.text} ${storeColors.border}` : hasStoreAssigned ? `${storeColors.bg} ${storeColors.text} border-transparent` : darkMode ? 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
-                              >
-                                <span className="truncate flex items-center gap-1.5 pr-2">
-                                  {hasStoreAssigned && <StoreLogo storeName={item.store!} />}
-                                  {hasStoreAssigned ? item.store : "From"}
-                                </span>
-                                <ChevronDown className={`w-3 h-3 transition-transform flex-shrink-0 ${isStoreMenu ? 'rotate-180' : ''}`} />
+                              <button onClick={() => setActiveMenu(isStoreMenu ? null : {id: item.id, type: 'store'})} className={`flex-1 flex items-center justify-between px-3 py-2 rounded-lg text-[9px] font-bold uppercase border ${hasStoreAssigned ? `${storeColors.bg} ${storeColors.text} border-transparent` : darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                                {hasStoreAssigned && <StoreLogo storeName={item.store!} />}
+                                {hasStoreAssigned ? item.store : "From"}
+                                <ChevronDown className="w-3 h-3" />
                               </button>
                             </div>
 
-                            {/* --- EXPANDABLE TRAY --- */}
                             {activeMenu?.id === item.id && (
-                              <div className={`mt-3 pt-3 border-t border-dashed animate-in fade-in slide-in-from-top-2 duration-200 ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-                                
-                                {activeMenu.type === 'category' ? (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {categoryOrder.map(c => (
-                                      <button 
-                                        key={c}
-                                        onClick={() => { handleUpdateCategory(item.id, c); setActiveMenu(null); }}
-                                        className={`text-[10px] px-2.5 py-1.5 rounded-md border font-semibold transition-all active:scale-95 ${item.category === c ? 'bg-primary text-white border-primary shadow-sm' : darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}
-                                      >
-                                        {c}
-                                      </button>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {PRESET_STORES.map(s => {
-                                      const chipColors = STORE_COLORS[s] || STORE_COLORS["Other"];
-                                      const isSelected = item.store === s;
-                                      return (
-                                        <button 
-                                          key={s}
-                                          onClick={() => { handleUpdateStore(item.id, isSelected ? "" : s); setActiveMenu(null); }}
-                                          className={`flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-md border font-semibold transition-all active:scale-95 ${isSelected ? `${chipColors.bg} ${chipColors.text} ${chipColors.border} shadow-sm ring-1 ring-inset ${chipColors.border}` : darkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600' : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300'}`}
-                                        >
-                                          <StoreLogo storeName={s} />
-                                          {s}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                )}
+                              <div className="mt-3 pt-3 border-t border-dashed flex flex-wrap gap-1.5">
+                                {(activeMenu.type === 'category' ? categoryOrder : PRESET_STORES).map(val => (
+                                  <button key={val} onClick={() => { if (activeMenu.type === 'category') handleUpdateCategory(item.id, val); else handleUpdateStore(item.id, val); setActiveMenu(null); }} className={`text-[9px] px-2.5 py-1.5 rounded-md border font-bold ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                    {val}
+                                  </button>
+                                ))}
                               </div>
                             )}
-
                           </div>
                         )})}
                       </div>
                     </div>
                   ))}
-                    <div className="py-8 border-t border-dashed flex justify-center opacity-40">
-                        <button onClick={handleClearList} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest hover:text-red-500 transition-colors"><RotateCcw className="w-3 h-3" /> Clear List</button>
-                    </div>
                   </>
                 )}
               </TabsContent>
 
               <TabsContent value="cart" className="mt-6 space-y-3">
-                {cartItems.length > 0 && (
-                  <button onClick={handleCompleteTrip} className="w-full mb-4 bg-primary text-white p-4 rounded-xl font-black shadow-lg uppercase tracking-widest active:scale-95">Complete Trip</button>
-                )}
+                {cartItems.length > 0 && <button onClick={handleCompleteTrip} className="w-full mb-4 bg-primary text-white p-4 rounded-xl font-black uppercase tracking-widest shadow-lg">Complete Trip</button>}
                 {cartItems.map(item => (
                   <div key={item.id} className={`flex items-center justify-between p-4 border rounded-xl opacity-60 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white'}`}>
-                    <span className="font-semibold text-[13px] line-through">{item.name}</span>
+                    <div>
+                      <span className="font-semibold text-[13px] line-through block">{item.name}</span>
+                      <span className="text-[9px] font-bold opacity-50 mt-1 block">{getTimeAgo(item.purchaseDates?.[item.purchaseDates.length - 1])}</span>
+                    </div>
                     <div className="flex gap-2">
                       <button onClick={() => setItems(items.map(i => i.id === item.id ? {...i, checkedOut: false} : i))} className="p-2 text-primary"><RefreshCcw className="w-4 h-4"/></button>
                       <button onClick={() => setItems(items.filter(i => i.id !== item.id))} className="p-2 text-red-400"><Trash2 className="w-5 h-5" /></button>
@@ -518,167 +404,61 @@ export default function App() {
               </TabsContent>
 
               <TabsContent value="history" className="mt-6 space-y-3">
-                {historyItems.map(item => {
-                  const hasStoreAssigned = Boolean(item.store && item.store !== "Any Store");
-                  return (
+                {historyItems.map(item => (
                   <div key={item.id} className={`flex items-center justify-between p-4 border rounded-xl opacity-80 shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-card'}`}>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-[13px]">{item.name}</span>
-                        {hasStoreAssigned && (
-                          <span className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${getStoreColor(item.store).badge}`}>
-                            <StoreLogo storeName={item.store!} />
-                            {item.store}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[10px] font-black uppercase opacity-50 mt-1">
-                        {item.purchaseDates && item.purchaseDates.length > 0 ? getTimeAgo(item.purchaseDates[item.purchaseDates.length - 1]) : "Never purchased"}
-                      </p>
+                      <span className="font-semibold text-[13px] block">{item.name}</span>
+                      <span className="text-[10px] font-black uppercase opacity-50 mt-1 block">{getTimeAgo(item.purchaseDates?.[item.purchaseDates.length - 1])}</span>
                     </div>
                     <button onClick={() => handleAddItem(item.name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim(), undefined, undefined, true)} className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors"><RefreshCcw className="w-5 h-5" /></button>
                   </div>
-                )})}
-                
-                {historyItems.length > 0 && (
-                  <div className="py-8 border-t border-dashed flex justify-center opacity-40">
-                    <button onClick={handleRefreshHabits} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest hover:text-red-500 transition-colors"><RotateCcw className="w-3 h-3" /> Refresh Habits</button>
-                  </div>
-                )}
+                ))}
               </TabsContent>
             </Tabs>
           </div>
           
-          {/* --- STATS PANEL --- */}
           {showStats && (
             <div className="lg:col-span-1 space-y-4">
               <div className={`p-1 flex rounded-lg border shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
-                <button onClick={() => { setStatView('items'); setExpandedStat(null); }} className={`flex items-center justify-center gap-1.5 flex-1 text-[10px] sm:text-xs font-bold py-2 rounded-md transition-all ${statView === 'items' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow' : 'bg-white text-primary shadow') : 'text-slate-400 hover:text-slate-600'}`}>
-                  <ListOrdered className="w-3.5 h-3.5" /> Items
-                </button>
-                <button onClick={() => { setStatView('categories'); setExpandedStat(null); }} className={`flex items-center justify-center gap-1.5 flex-1 text-[10px] sm:text-xs font-bold py-2 rounded-md transition-all ${statView === 'categories' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow' : 'bg-white text-primary shadow') : 'text-slate-400 hover:text-slate-600'}`}>
-                  <PieChart className="w-3.5 h-3.5" /> Categories
-                </button>
-                <button onClick={() => { setStatView('stores'); setExpandedStat(null); }} className={`flex items-center justify-center gap-1.5 flex-1 text-[10px] sm:text-xs font-bold py-2 rounded-md transition-all ${statView === 'stores' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow' : 'bg-white text-primary shadow') : 'text-slate-400 hover:text-slate-600'}`}>
-                  <Store className="w-3.5 h-3.5" /> Stores
-                </button>
+                <button onClick={() => setStatView('items')} className={`flex-1 text-[10px] font-bold py-2 rounded-md ${statView === 'items' ? 'bg-white dark:bg-slate-800 text-primary shadow' : 'text-slate-400'}`}>Items</button>
+                <button onClick={() => setStatView('categories')} className={`flex-1 text-[10px] font-bold py-2 rounded-md ${statView === 'categories' ? 'bg-white dark:bg-slate-800 text-primary shadow' : 'text-slate-400'}`}>Categories</button>
+                <button onClick={() => setStatView('stores')} className={`flex-1 text-[10px] font-bold py-2 rounded-md ${statView === 'stores' ? 'bg-white dark:bg-slate-800 text-primary shadow' : 'text-slate-400'}`}>Stores</button>
               </div>
 
-              {statView === 'items' ? (
-                <div className={`rounded-xl border p-6 shadow-sm transition-all ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-card'}`}>
-                  <h3 className="font-black text-xs uppercase tracking-widest mb-6 opacity-80 flex items-center justify-between">
-                    <span className="flex items-center gap-2"><ListOrdered className="w-4 h-4 text-primary" /> Purchase Habits</span>
-                  </h3>
-                  <div className="space-y-5">
-                    {displayedItems.length === 0 ? (
-                      <p className="text-xs opacity-50 text-center py-8 italic">No purchase history yet.</p>
-                    ) : (
-                      <>
-                        {displayedItems.map((item, i) => {
-                          const max = allItemsData[0].count; 
-                          const percentage = Math.max(2, Math.round((item.count / max) * 100)); 
-                          return (
-                            <div key={item.name} className="space-y-1.5 group">
-                              <div className="flex justify-between text-[11px] font-bold">
-                                <span className="truncate pr-4 opacity-80 group-hover:opacity-100 transition-opacity">
-                                  <span className="opacity-50 font-normal mr-1">{i + 1}.</span> {item.name}
-                                </span>
-                                <span className="opacity-60">{item.count}</span>
-                              </div>
-                              <div className={`h-2.5 w-full rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-hidden`}><div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }} /></div>
-                            </div>
-                          )
-                        })}
-                        {allItemsData.length > 15 && (
-                          <div className="pt-4 border-t border-dashed border-slate-200 dark:border-slate-800 text-center">
-                            <button 
-                              onClick={() => setShowAllItems(!showAllItems)}
-                              className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-primary transition-colors"
-                            >
-                              {showAllItems ? "Show Less" : `Show All (${allItemsData.length})`}
-                            </button>
+              <div className={`rounded-xl border p-6 shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-card'}`}>
+                <h3 className="font-black text-xs uppercase tracking-widest mb-6 opacity-80 flex items-center gap-2">
+                  {statView === 'items' ? <ListOrdered className="w-4 h-4 text-primary" /> : statView === 'categories' ? <PieChart className="w-4 h-4 text-primary" /> : <Store className="w-4 h-4 text-primary" />}
+                  {statView.toUpperCase()} ANALYSIS
+                </h3>
+                <div className="space-y-5">
+                  {(statView === 'items' ? displayedItems : statView === 'categories' ? categoryData : storeData).map((data, i) => {
+                    const max = (statView === 'items' ? allItemsData : statView === 'categories' ? categoryData : storeData)[0].count;
+                    const percentage = Math.max(2, Math.round((data.count / max) * 100));
+                    const isExpanded = expandedStat === data.name;
+                    return (
+                      <div key={data.name} className="space-y-1.5 group cursor-pointer" onClick={() => setExpandedStat(isExpanded ? null : data.name)}>
+                        <div className="flex justify-between text-[11px] font-bold">
+                          <span className="flex items-center gap-1.5 opacity-80 truncate">
+                            {(statView === 'categories' || statView === 'stores') && <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180 text-primary' : 'opacity-40'}`} />}
+                            {data.name}
+                          </span>
+                          <span className="opacity-60">{data.count}</span>
+                        </div>
+                        <div className={`h-2.5 w-full rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-hidden`}>
+                          <div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }} />
+                        </div>
+                        {isExpanded && statView !== 'items' && (
+                          <div className="pt-2 flex flex-wrap gap-1.5 animate-in fade-in slide-in-from-top-1">
+                            {(data as any).items.map((it: string) => (
+                              <span key={it} className={`text-[9px] px-2 py-1 rounded-md border font-semibold ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}>{it}</span>
+                            ))}
                           </div>
                         )}
-                      </>
-                    )}
-                  </div>
+                      </div>
+                    )
+                  })}
                 </div>
-              ) : statView === 'categories' ? (
-                <div className={`rounded-xl border p-6 shadow-sm transition-all ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-card'}`}>
-                  <h3 className="font-black text-xs uppercase tracking-widest mb-6 opacity-80 flex items-center gap-2"><PieChart className="w-4 h-4 text-primary" /> Category Breakdown</h3>
-                  <div className="space-y-5">
-                    {categoryData.length === 0 ? (
-                      <p className="text-xs opacity-50 text-center py-8 italic">No purchase history yet.</p>
-                    ) : (
-                      categoryData.map((cat, i) => {
-                        const max = categoryData[0].count; 
-                        const percentage = Math.max(2, Math.round((cat.count / max) * 100)); 
-                        const isExpanded = expandedStat === cat.name;
-                        return (
-                          <div key={cat.name} className="space-y-1.5 group cursor-pointer" onClick={() => setExpandedStat(isExpanded ? null : cat.name)}>
-                            <div className="flex justify-between text-[11px] font-bold">
-                              <span className="flex items-center gap-1.5 truncate pr-4 opacity-80 group-hover:opacity-100 transition-opacity">
-                                <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180 text-primary' : 'opacity-40'}`} />
-                                {cat.name}
-                              </span>
-                              <span className="opacity-60">{cat.count}</span>
-                            </div>
-                            <div className={`h-2.5 w-full rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-hidden`}><div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }} /></div>
-                            
-                            {isExpanded && (
-                              <div className={`pt-2 flex flex-wrap gap-1.5 animate-in fade-in slide-in-from-top-1`}>
-                                {cat.items.map(itemName => (
-                                  <span key={itemName} className={`text-[9px] px-2 py-1 rounded-md border font-semibold ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}>
-                                    {itemName}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className={`rounded-xl border p-6 shadow-sm transition-all ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-card'}`}>
-                  <h3 className="font-black text-xs uppercase tracking-widest mb-6 opacity-80 flex items-center gap-2"><Store className="w-4 h-4 text-primary" /> Store Breakdown</h3>
-                  <div className="space-y-5">
-                    {storeData.length === 0 ? (
-                      <p className="text-xs opacity-50 text-center py-8 italic">No purchase history yet.</p>
-                    ) : (
-                      storeData.map((st, i) => {
-                        const max = storeData[0].count; 
-                        const percentage = Math.max(2, Math.round((st.count / max) * 100)); 
-                        const isExpanded = expandedStat === st.name;
-                        return (
-                          <div key={st.name} className="space-y-1.5 group cursor-pointer" onClick={() => setExpandedStat(isExpanded ? null : st.name)}>
-                            <div className="flex items-center justify-between text-[11px] font-bold">
-                              <span className="flex items-center gap-1.5 truncate pr-4 opacity-80 group-hover:opacity-100 transition-opacity">
-                                <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180 text-primary' : 'opacity-40'}`} />
-                                {st.name !== "Unassigned" && <StoreLogo storeName={st.name} className="w-3 h-3" />}
-                                {st.name}
-                              </span>
-                              <span className="opacity-60">{st.count}</span>
-                            </div>
-                            <div className={`h-2.5 w-full rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-hidden`}><div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }} /></div>
-                            
-                            {isExpanded && (
-                              <div className={`pt-2 flex flex-wrap gap-1.5 animate-in fade-in slide-in-from-top-1`}>
-                                {st.items.map(itemName => (
-                                  <span key={itemName} className={`text-[9px] px-2 py-1 rounded-md border font-semibold ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}>
-                                    {itemName}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           )}
         </div>
