@@ -290,7 +290,7 @@ export default function App() {
               {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             <button onClick={() => setShowStats(!showStats)} className="flex items-center gap-2 text-xs px-5 py-2.5 rounded-full font-black border border-primary/20 bg-primary/10 text-primary transition-all">
-              {showStats ? <BarChart3 className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}{showStats ? "STATS" : "HIDE"}
+              {showStats ? <BarChart3 className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}{showStats ? "SHOW STATS" : "HIDE"}
             </button>
           </div>
         </header>
