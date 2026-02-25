@@ -30,7 +30,7 @@ const SpeedCartIcon = ({ className }: { className?: string }) => (
 const getAutoCategory = (name: string): string | null => {
   const lower = name.toLowerCase();
   const categoryKeywords: Record<string, string[]> = {
-    "🥬 Produce (Fruits & Veggies)": ["onion", "tomato", "potato", "apple", "banana", "orange", "grape", "spinach", "lettuce", "broccoli", "carrot", "garlic", "ginger", "pepper", "mushroom", "berry", "lemon", "lime", "avocado", "cilantro", "coriander", "okra", "palak", "fruit", "veg", "salad", "watermelon", "strawberry", "blueberry", "melon", "cherry", "peach", "mango", "pineapple", "coconut", "kiwi", "eggplant", "corn", "cucumber", "beet"],
+    "🥬 Produce": ["onion", "tomato", "potato", "apple", "banana", "orange", "grape", "spinach", "lettuce", "broccoli", "carrot", "garlic", "ginger", "pepper", "mushroom", "berry", "lemon", "lime", "avocado", "cilantro", "coriander", "okra", "palak", "fruit", "veg", "salad", "watermelon", "strawberry", "blueberry", "melon", "cherry", "peach", "mango", "pineapple", "coconut", "kiwi", "eggplant", "corn", "cucumber", "beet"],
     "🥛 Dairy & Eggs": ["milk", "cheese", "egg", "butter", "yogurt", "yoghurt", "cream", "paneer", "dahi", "curd"],
     "🥩 Meat & Seafood": ["chicken", "beef", "pork", "fish", "salmon", "bacon", "sausage", "meat", "shrimp", "prawn", "turkey"],
     "🍞 Bakery": ["bread", "bun", "roll", "bagel", "muffin", "cake", "croissant", "pastry", "pita", "tortilla", "baguette", "pretzel", "pancake", "waffle", "sourdough"],
@@ -78,7 +78,7 @@ const EMOJI_MAP: Record<string, string> = {
   pill: "💊", tablet: "💊", medicine: "💊", vitamin: "💊", tylenol: "💊", advil: "💊", ibuprofen: "💊", "band-aid": "🩹", pharmacy: "⚕️"
 };
 
-const GROCERY_CATEGORIES = ["🥬 Produce (Fruits & Veggies)", "🥛 Dairy & Eggs", "🥩 Meat & Seafood", "🍞 Bakery", "🍝 Pasta & Grains", "🥜 Nuts & Seeds", "🥫 Pantry", "❄️ Frozen Foods", "🍿 Snacks & Candy", "🥤 Beverages & Coffee", "🧼 Household & Cleaning", "🧴 Personal & Pet Care", "💊 Health & Pharmacy", "👶 Baby", "📦 Other"];
+const GROCERY_CATEGORIES = ["🥬 Produce", "🥛 Dairy & Eggs", "🥩 Meat & Seafood", "🍞 Bakery", "🍝 Pasta & Grains", "🥜 Nuts & Seeds", "🥫 Pantry", "❄️ Frozen Foods", "🍿 Snacks & Candy", "🥤 Beverages & Coffee", "🧼 Household & Cleaning", "🧴 Personal & Pet Care", "💊 Health & Pharmacy", "👶 Baby", "📦 Other"];
 const PRESET_STORES = ["Costco", "FreshCo", "No Frills", "Walmart", "SDM", "Other"];
 
 // --- 3. BRAND COLOR MAPPING & LOGO DOMAINS ---
