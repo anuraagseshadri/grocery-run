@@ -112,6 +112,10 @@ const StoreLogo = ({ storeName, className = "" }: { storeName: string, className
       src={`https://www.google.com/s2/favicons?sz=64&domain=${domain}`} 
       alt={`${storeName} logo`} 
       className={`w-3.5 h-3.5 rounded-full bg-white p-[1px] object-contain flex-shrink-0 ${className}`} 
+      onError={(e) => {
+        e.currentTarget.style.display = 'none';
+        e.currentTarget.parentElement?.insertAdjacentHTML('beforeend', `<svg class="w-3 h-3 ${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`);
+      }}
     />
   );
 };
@@ -349,7 +353,6 @@ export default function App() {
                                 <button onClick={() => handleCheckout(item.id)} className="p-1 rounded-full border-2 border-primary/20 text-transparent hover:text-primary"><CheckCheck className="w-4 h-4"/></button>
                                 <div>
                                   <span className="font-semibold text-[13px] truncate block">{item.name}</span>
-                                  {/* --- DYNAMIC LAST PURCHASED MSG --- */}
                                   <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
                                     <History className="w-2.5 h-2.5" /> {getTimeAgo(lastDate)}
                                   </span>
@@ -369,13 +372,39 @@ export default function App() {
                               </button>
                             </div>
 
+                            {/* --- RESTORED EXPANDABLE TRAY LOGIC --- */}
                             {activeMenu?.id === item.id && (
-                              <div className="mt-3 pt-3 border-t border-dashed flex flex-wrap gap-1.5">
-                                {(activeMenu.type === 'category' ? categoryOrder : PRESET_STORES).map(val => (
-                                  <button key={val} onClick={() => { if (activeMenu.type === 'category') handleUpdateCategory(item.id, val); else handleUpdateStore(item.id, val); setActiveMenu(null); }} className={`text-[9px] px-2.5 py-1.5 rounded-md border font-bold ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                                    {val}
-                                  </button>
-                                ))}
+                              <div className="mt-3 pt-3 border-t border-dashed animate-in fade-in slide-in-from-top-2 duration-200">
+                                {activeMenu.type === 'category' ? (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {categoryOrder.map(c => (
+                                      <button 
+                                        key={c}
+                                        onClick={() => { handleUpdateCategory(item.id, c); setActiveMenu(null); }}
+                                        className={`text-[10px] px-2.5 py-1.5 rounded-md border font-semibold transition-all active:scale-95 ${item.category === c ? 'bg-primary text-white border-primary shadow-sm' : darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}
+                                      >
+                                        {c}
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {PRESET_STORES.map(s => {
+                                      const chipColors = STORE_COLORS[s] || STORE_COLORS["Other"];
+                                      const isSelected = item.store === s;
+                                      return (
+                                        <button 
+                                          key={s}
+                                          onClick={() => { handleUpdateStore(item.id, isSelected ? "" : s); setActiveMenu(null); }}
+                                          className={`flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-md border font-semibold transition-all active:scale-95 ${isSelected ? `${chipColors.bg} ${chipColors.text} ${chipColors.border} shadow-sm ring-1 ring-inset ${chipColors.border}` : darkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600' : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300'}`}
+                                        >
+                                          <StoreLogo storeName={s} />
+                                          {s}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -417,6 +446,7 @@ export default function App() {
             </Tabs>
           </div>
           
+          {/* --- STATS PANEL --- */}
           {showStats && (
             <div className="lg:col-span-1 space-y-4">
               <div className={`p-1 flex rounded-lg border shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
@@ -437,13 +467,18 @@ export default function App() {
                     const isExpanded = expandedStat === data.name;
                     return (
                       <div key={data.name} className="space-y-1.5 group cursor-pointer" onClick={() => setExpandedStat(isExpanded ? null : data.name)}>
+                        
+                        {/* --- RESTORED LOGO LOGIC IN STATS PANEL --- */}
                         <div className="flex justify-between text-[11px] font-bold">
-                          <span className="flex items-center gap-1.5 opacity-80 truncate">
-                            {(statView === 'categories' || statView === 'stores') && <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180 text-primary' : 'opacity-40'}`} />}
+                          <span className="flex items-center gap-1.5 opacity-80 truncate group-hover:opacity-100 transition-opacity">
+                            {statView !== 'items' && <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180 text-primary' : 'opacity-40'}`} />}
+                            {statView === 'stores' && data.name !== "Unassigned" && <StoreLogo storeName={data.name} className="w-3 h-3" />}
+                            {statView === 'items' && <span className="opacity-50 font-normal mr-1">{i + 1}.</span>}
                             {data.name}
                           </span>
                           <span className="opacity-60">{data.count}</span>
                         </div>
+
                         <div className={`h-2.5 w-full rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-hidden`}>
                           <div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }} />
                         </div>
