@@ -51,12 +51,31 @@ const getAutoCategory = (name: string): string | null => {
   return null;
 };
 
+// RESTORED: Full mapping of emojis
 const EMOJI_MAP: Record<string, string> = {
-  apple: "🍎", banana: "🍌", orange: "🍊", lemon: "🍋", watermelon: "🍉", grape: "🍇", strawberry: "🍓",
-  milk: "🥛", cheese: "🧀", egg: "🥚", butter: "🧈", yogurt: "🍦",
-  chicken: "🍗", meat: "🥩", fish: "🐟",
-  bread: "🍞", pasta: "🍝", noodle: "🍜", rice: "🍚",
-  pill: "💊", vitamin: "💊", diaper: "🧷"
+  apple: "🍎", "green apple": "🍏", banana: "🍌", orange: "🍊", lemon: "🍋", lime: "🍈",
+  watermelon: "🍉", grape: "🍇", strawberry: "🍓", blueberry: "🫐", melon: "🍈", cherry: "🍒",
+  peach: "🍑", mango: "🥭", pineapple: "🍍", coconut: "🥥", kiwi: "🥝", tomato: "🍅",
+  eggplant: "🍆", potato: "🥔", carrot: "🥕", corn: "🌽", pepper: "🌶️", "bell pepper": "🫑",
+  cucumber: "🥒", lettuce: "🥬", spinach: "🥬", broccoli: "🥦", garlic: "🧄", onion: "🧅",
+  mushroom: "🍄", ginger: "🫚", okra: "🎋", palak: "🥬", cilantro: "🌿", coriander: "🌿", avocado: "🥑", beet: "🍠",
+  milk: "🥛", cheese: "🧀", egg: "🥚", butter: "🧈", yogurt: "🍦", curd: "🥣", dahi: "🥣", paneer: "🧀",
+  chicken: "🍗", meat: "🥩", beef: "🥩", pork: "🥩", bacon: "🥓", fish: "🐟",
+  salmon: "🍣", shrimp: "🦐", prawn: "🍤", turkey: "🦃", sausage: "🌭",
+  bread: "🍞", croissant: "🥐", baguette: "🥖", pretzel: "🥨", bagel: "🥯", sourdough: "🥖",
+  pancake: "🥞", waffle: "🧇", bun: "🥯", roll: "🥐", pastry: "🥐", cake: "🍰",
+  peanut: "🥜", nut: "🌰", almond: "🌰", cashew: "🌰", walnut: "🌰", pecan: "🌰", pistachio: "🌰",
+  pasta: "🍝", noodle: "🍜", spaghetti: "🍝", ramen: "🍜", "pasta sauce": "🥫", sauce: "🥫",
+  rice: "🍚", dal: "🥣", lentil: "🥣", flour: "🌾",
+  atta: "🌾", salt: "🧂", spice: "🌶️", oil: "🛢️", honey: "🍯", jam: "🍯",
+  soup: "🍲", cereal: "🥣", can: "🥫", bean: "🫘", "peanut butter": "🥜",
+  pizza: "🍕", "ice cream": "🍨", frozen: "🧊", popsicle: "🍧", chip: "🍟", chips: "🍟",
+  cookie: "🍪", cracker: "🍘", candy: "🍬", chocolate: "🍫", popcorn: "🍿", snack: "🥨",
+  water: "💧", juice: "🧃", soda: "🥤", pop: "🥤", coffee: "☕", tea: "🍵",
+  beer: "🍺", wine: "🍷", liquor: "🥃", drink: "🍹",
+  "paper towel": "🧻", "toilet paper": "🧻", soap: "🧼", sponge: "🧽", detergent: "🧼", bleach: "🧴",
+  diaper: "🧷", formula: "🍼", wipe: "🧻", pet: "🐕", dog: "🐕", cat: "🐈", toothpaste: "🪥", shampoo: "🧴", lotion: "🧴", deodorant: "🧴",
+  pill: "💊", tablet: "💊", medicine: "💊", vitamin: "💊", tylenol: "💊", advil: "💊", ibuprofen: "💊", "band-aid": "🩹", pharmacy: "⚕️"
 };
 
 const GROCERY_CATEGORIES = ["🥬 Produce (Fruits & Veggies)", "🥛 Dairy & Eggs", "🥩 Meat & Seafood", "🍞 Bakery", "🍝 Pasta & Grains", "🥜 Nuts & Seeds", "🥫 Pantry", "❄️ Frozen Foods", "🍿 Snacks & Candy", "🥤 Beverages & Coffee", "🧼 Household & Cleaning", "🧴 Personal & Pet Care", "💊 Health & Pharmacy", "👶 Baby", "📦 Other"];
@@ -372,7 +391,6 @@ export default function App() {
                               </button>
                             </div>
 
-                            {/* --- RESTORED EXPANDABLE TRAY LOGIC --- */}
                             {activeMenu?.id === item.id && (
                               <div className="mt-3 pt-3 border-t border-dashed animate-in fade-in slide-in-from-top-2 duration-200">
                                 {activeMenu.type === 'category' ? (
