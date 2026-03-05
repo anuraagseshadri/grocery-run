@@ -7,6 +7,7 @@ import { toast, Toaster } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { AddItemForm } from './components/AddItemForm';
 import { GroceryItem } from './types';
+import { BackupRestore } from './components/BackupRestore';
 import {
   saveToLocalStorage,
   loadFromLocalStorage,
@@ -460,6 +461,7 @@ export default function App() {
                     <button onClick={() => handleAddItem(item.name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim(), undefined, undefined, true)} className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors"><RefreshCcw className="w-5 h-5" /></button>
                   </div>
                 ))}
+                <BackupRestore />
               </TabsContent>
             </Tabs>
           </div>
