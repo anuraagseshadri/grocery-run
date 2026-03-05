@@ -7,7 +7,7 @@ import { toast, Toaster } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { AddItemForm } from './components/AddItemForm';
 import { GroceryItem } from './types';
-import { BackupRestore } from './components/BackupRestore';
+import { BackupRestore } from '../components/BackupRestore';
 import {
   saveToLocalStorage,
   loadFromLocalStorage,
