@@ -42,30 +42,39 @@ export const BackupRestore = () => {
 
   return (
     <div className="relative inline-block text-left">
-      {/* THE SHIELD BUTTON */}
+      {/* COMPACT TRIGGER */}
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 rounded-full hover:bg-primary/10 transition-colors text-primary flex items-center gap-1"
-        title="Data Management"
+        className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-primary flex items-center gap-1"
       >
         <ShieldCheck className="w-5 h-5" />
-        <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {/* THE DROPDOWN MENU */}
+      {/* MOBILE-OPTIMIZED DROPDOWN */}
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 mt-2 w-48 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl z-50 overflow-hidden">
-            <div className="p-3 border-b border-slate-100 dark:border-slate-800">
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">System Data</p>
+          <div className="absolute right-0 mt-2 w-48 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-1">
+              {/* BACKUP BUTTON */}
+              <button 
+                onClick={handleExport} 
+                className="w-full flex items-center gap-3 p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl text-xs font-bold transition-colors whitespace-nowrap"
+              >
+                <Download className="w-4 h-4 text-blue-500" />
+                Backup List
+              </button>
+
+              {/* RESTORE BUTTON */}
+              <button 
+                onClick={() => fileInputRef.current?.click()} 
+                className="w-full flex items-center gap-3 p-3 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-xl text-xs font-bold transition-colors whitespace-nowrap"
+              >
+                <Upload className="w-4 h-4 text-amber-500" />
+                Restore List
+              </button>
             </div>
-            <button onClick={handleExport} className="w-full flex items-center gap-3 p-3 hover:bg-primary/5 text-xs font-bold transition-colors">
-              <Download className="w-4 h-4 text-primary" /> Backup (.json)
-            </button>
-            <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center gap-3 p-3 hover:bg-primary/5 text-xs font-bold transition-colors">
-              <Upload className="w-4 h-4 text-primary" /> Restore File
-            </button>
           </div>
         </>
       )}
