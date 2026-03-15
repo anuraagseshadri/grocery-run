@@ -13,7 +13,7 @@ import {
   loadFromLocalStorage,
 } from './utils/groceryUtils';
 
-// --- 1. BULLETPROOF SPEED CART LOGO ---
+// --- 1. LOGO COMPONENT ---
 const SpeedCartIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} preserveAspectRatio="xMidYMid meet">
     <path d="M1 13H5M2 9H4M0 17H6" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" className="animate-pulse" />
@@ -27,7 +27,7 @@ const SpeedCartIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-// --- 2. SMART KEYWORD ENGINE ---
+// --- 2. HELPERS & ENGINE (UNCHANGED) ---
 const getAutoCategory = (name: string): string | null => {
   const lower = name.toLowerCase();
   const categoryKeywords: Record<string, string[]> = {
@@ -52,7 +52,6 @@ const getAutoCategory = (name: string): string | null => {
   return null;
 };
 
-// RESTORED: Full mapping of emojis
 const EMOJI_MAP: Record<string, string> = {
   apple: "🍎", "green apple": "🍏", banana: "🍌", orange: "🍊", lemon: "🍋", lime: "🍈",
   watermelon: "🍉", grape: "🍇", strawberry: "🍓", blueberry: "🫐", melon: "🍈", cherry: "🍒",
@@ -82,7 +81,6 @@ const EMOJI_MAP: Record<string, string> = {
 const GROCERY_CATEGORIES = ["🥬 Produce", "🥛 Dairy & Eggs", "🥩 Meat & Seafood", "🍞 Bakery", "🍝 Pasta & Grains", "🥜 Nuts & Seeds", "🥫 Pantry", "❄️ Frozen Foods", "🍿 Snacks & Candy", "🥤 Beverages & Coffee", "🧼 Household & Cleaning", "🧴 Personal & Pet Care", "💊 Health & Pharmacy", "👶 Baby", "📦 Other"];
 const PRESET_STORES = ["Costco", "FreshCo", "No Frills", "Walmart", "SDM", "Other"];
 
-// --- 3. BRAND COLOR MAPPING & LOGO DOMAINS ---
 const STORE_DOMAINS: Record<string, string> = {
   "Costco": "costco.ca", "FreshCo": "freshco.com", "No Frills": "nofrills.ca", "Walmart": "walmart.ca", "SDM": "shoppersdrugmart.ca"
 };
@@ -100,7 +98,7 @@ const getStoreColor = (storeName?: string) => {
   if (!storeName || storeName === "Any Store") {
     return { text: "text-slate-500 dark:text-slate-400", bg: "bg-slate-50 dark:bg-slate-800/50", border: "border-slate-200 dark:border-slate-700", badge: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" };
   }
-  return STORE_COLORS[storeName] || { text: "text-slate-500 dark:text-slate-400", bg: "bg-slate-50 dark:bg-slate-800/50", border: "border-slate-200 dark:border-slate-700", badge: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" };
+  return STORE_COLORS[storeName] || STORE_COLORS["Other"];
 };
 
 const normalizeName = (name: string) => {
@@ -112,7 +110,6 @@ const normalizeName = (name: string) => {
   return clean;
 };
 
-// --- REFINED TIME AGO FUNCTION ---
 const getTimeAgo = (dateString: string | undefined) => {
   if (!dateString) return "First time purchase";
   const diffDays = Math.floor((new Date().getTime() - new Date(dateString).getTime()) / (1000 * 60 * 60 * 24));
@@ -123,7 +120,6 @@ const getTimeAgo = (dateString: string | undefined) => {
   return `Purchased ${Math.floor(diffDays / 30)} months ago`;
 };
 
-// --- LOGO COMPONENT ---
 const StoreLogo = ({ storeName, className = "" }: { storeName: string, className?: string }) => {
   const domain = STORE_DOMAINS[storeName];
   if (!domain) return <MapPin className={`w-3 h-3 flex-shrink-0 ${className}`} />;
@@ -140,8 +136,7 @@ const StoreLogo = ({ storeName, className = "" }: { storeName: string, className
   );
 };
 
-
-// --- 4. MAIN APP COMPONENT ---
+// --- 3. MAIN APP COMPONENT ---
 export default function App() {
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [categoryPrefs, setCategoryPrefs] = useState<Record<string, string>>({});
@@ -229,13 +224,6 @@ export default function App() {
     setItems(prev => prev.map(i => i.id === id ? { ...i, store: newStore } : i));
   };
 
-  const handleClearList = () => {
-    if (window.confirm("Remove all unchecked items?")) {
-      setItems(prev => prev.filter(i => i.isHistory || i.checkedOut));
-      toast.success("List cleared.");
-    }
-  };
-
   const moveCategoryUp = (cat: string) => {
     const idx = categoryOrder.indexOf(cat);
     if (idx > 0) { const newOrder = [...categoryOrder]; [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]]; setCategoryOrder(newOrder); }
@@ -295,6 +283,7 @@ export default function App() {
       <Toaster position="top-center" richColors theme={darkMode ? 'dark' : 'light'} />
       <div className="max-w-7xl mx-auto flex-1 w-full">
         
+        {/* --- REFACTORED HEADER WITH GLOBAL CONTROL PILL --- */}
         <header className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className={`p-1 rounded-2xl border shadow-md transition-all duration-200 ${isBouncing ? 'scale-110 -rotate-6' : 'scale-100 rotate-0'} ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-[#bbf7d0]'}`}>
@@ -305,11 +294,18 @@ export default function App() {
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mt-2">Smart. Organic. Adaptive.</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => setDarkMode(!darkMode)} className={`p-2.5 rounded-full border transition-all ${darkMode ? 'bg-slate-900 border-slate-800 text-yellow-400' : 'bg-white border-slate-200 text-slate-600'}`}>
-              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-            <button onClick={() => setShowStats(!showStats)} className="flex items-center gap-2 text-xs px-5 py-2.5 rounded-full font-black border border-primary/20 bg-primary/10 text-primary transition-all">
+
+          <div className="flex items-center gap-2">
+            {/* Global Control Pill Container */}
+            <div className={`flex items-center gap-1 p-1 rounded-full border shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+              <BackupRestore />
+              <div className="w-px h-4 bg-slate-200 dark:bg-slate-800 mx-1" />
+              <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-full transition-all hover:bg-slate-100 dark:hover:bg-slate-800 ${darkMode ? 'text-yellow-400' : 'text-slate-600'}`}>
+                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </button>
+            </div>
+
+            <button onClick={() => setShowStats(!showStats)} className="flex items-center gap-2 text-[10px] px-5 py-2.5 rounded-full font-black border border-primary/20 bg-primary/10 text-primary transition-all">
               {showStats ? <BarChart3 className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}{showStats ? "SHOW STATS" : "HIDE STATS"}
             </button>
           </div>
@@ -318,6 +314,7 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className={`${showStats ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-6`}>
             
+            {/* Suggestions Bar */}
             {suggestions.length > 0 && (
               <div className={`rounded-xl border p-4 border-dashed animate-in fade-in slide-in-from-top-4 duration-500 ${darkMode ? 'bg-blue-900/10 border-blue-800/50' : 'bg-blue-50/50 border-blue-200'}`}>
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-3 flex items-center gap-2"><Sparkles className="w-3 h-3" /> Running Low?</h3>
@@ -358,14 +355,11 @@ export default function App() {
                           <button onClick={() => moveCategoryDown(cat)} className="p-1"><ChevronDown className="w-3.5 h-3.5 opacity-50 hover:opacity-100" /></button>
                         </div>
                       </div>
-
                       <div className="space-y-3">
                         {grouped[cat].map(item => {
                           const isStoreMenu = activeMenu?.id === item.id && activeMenu.type === 'store';
                           const hasStoreAssigned = Boolean(item.store && item.store !== "Any Store");
                           const storeColors = getStoreColor(item.store);
-                          const lastDate = item.purchaseDates?.[item.purchaseDates.length - 1];
-                          
                           return (
                           <div key={item.id} className={`flex flex-col p-4 border rounded-xl shadow-sm transition-all ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white'}`}>
                             <div className="flex items-center justify-between">
@@ -374,13 +368,12 @@ export default function App() {
                                 <div>
                                   <span className="font-semibold text-[13px] truncate block">{item.name}</span>
                                   <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                                    <History className="w-2.5 h-2.5" /> {getTimeAgo(lastDate)}
+                                    <History className="w-2.5 h-2.5" /> {getTimeAgo(item.purchaseDates?.[item.purchaseDates.length - 1])}
                                   </span>
                                 </div>
                               </div>
                               <button onClick={() => setItems(items.filter(i => i.id !== item.id))} className="p-2 text-red-400 lg:opacity-0 hover:opacity-100"><Trash2 className="w-5 h-5" /></button>
                             </div>
-                            
                             <div className="flex gap-2 mt-2">
                               <button onClick={() => setActiveMenu(activeMenu?.id === item.id && activeMenu.type === 'category' ? null : {id: item.id, type: 'category'})} className={`flex-1 px-3 py-2 rounded-lg text-[9px] font-bold uppercase border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                                 {item.category}
@@ -391,19 +384,12 @@ export default function App() {
                                 <ChevronDown className="w-3 h-3" />
                               </button>
                             </div>
-
                             {activeMenu?.id === item.id && (
                               <div className="mt-3 pt-3 border-t border-dashed animate-in fade-in slide-in-from-top-2 duration-200">
                                 {activeMenu.type === 'category' ? (
                                   <div className="flex flex-wrap gap-1.5">
                                     {categoryOrder.map(c => (
-                                      <button 
-                                        key={c}
-                                        onClick={() => { handleUpdateCategory(item.id, c); setActiveMenu(null); }}
-                                        className={`text-[10px] px-2.5 py-1.5 rounded-md border font-semibold transition-all active:scale-95 ${item.category === c ? 'bg-primary text-white border-primary shadow-sm' : darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}
-                                      >
-                                        {c}
-                                      </button>
+                                      <button key={c} onClick={() => { handleUpdateCategory(item.id, c); setActiveMenu(null); }} className={`text-[10px] px-2.5 py-1.5 rounded-md border font-semibold ${item.category === c ? 'bg-primary text-white border-primary shadow-sm' : darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}>{c}</button>
                                     ))}
                                   </div>
                                 ) : (
@@ -412,14 +398,7 @@ export default function App() {
                                       const chipColors = STORE_COLORS[s] || STORE_COLORS["Other"];
                                       const isSelected = item.store === s;
                                       return (
-                                        <button 
-                                          key={s}
-                                          onClick={() => { handleUpdateStore(item.id, isSelected ? "" : s); setActiveMenu(null); }}
-                                          className={`flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-md border font-semibold transition-all active:scale-95 ${isSelected ? `${chipColors.bg} ${chipColors.text} ${chipColors.border} shadow-sm ring-1 ring-inset ${chipColors.border}` : darkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600' : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300'}`}
-                                        >
-                                          <StoreLogo storeName={s} />
-                                          {s}
-                                        </button>
+                                        <button key={s} onClick={() => { handleUpdateStore(item.id, isSelected ? "" : s); setActiveMenu(null); }} className={`flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-md border font-semibold ${isSelected ? `${chipColors.bg} ${chipColors.text} ${chipColors.border} shadow-sm ring-1 ring-inset ${chipColors.border}` : darkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600' : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300'}`}><StoreLogo storeName={s} />{s}</button>
                                       );
                                     })}
                                   </div>
@@ -452,6 +431,7 @@ export default function App() {
               </TabsContent>
 
               <TabsContent value="history" className="mt-6 space-y-3">
+                {/* REMOVED BACKUPRESTORE FROM HERE TO KEEP THE TAB CLEAN */}
                 {historyItems.map(item => (
                   <div key={item.id} className={`flex items-center justify-between p-4 border rounded-xl opacity-80 shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-card'}`}>
                     <div>
@@ -461,7 +441,6 @@ export default function App() {
                     <button onClick={() => handleAddItem(item.name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim(), undefined, undefined, true)} className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors"><RefreshCcw className="w-5 h-5" /></button>
                   </div>
                 ))}
-                <BackupRestore />
               </TabsContent>
             </Tabs>
           </div>
@@ -487,8 +466,6 @@ export default function App() {
                     const isExpanded = expandedStat === data.name;
                     return (
                       <div key={data.name} className="space-y-1.5 group cursor-pointer" onClick={() => setExpandedStat(isExpanded ? null : data.name)}>
-                        
-                        {/* --- RESTORED LOGO LOGIC IN STATS PANEL --- */}
                         <div className="flex justify-between text-[11px] font-bold">
                           <span className="flex items-center gap-1.5 opacity-80 truncate group-hover:opacity-100 transition-opacity">
                             {statView !== 'items' && <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180 text-primary' : 'opacity-40'}`} />}
@@ -498,7 +475,6 @@ export default function App() {
                           </span>
                           <span className="opacity-60">{data.count}</span>
                         </div>
-
                         <div className={`h-2.5 w-full rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-hidden`}>
                           <div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }} />
                         </div>
