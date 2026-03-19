@@ -1,498 +1,300 @@
+import { AddItemForm } from '../components/AddItemForm';
+import { Auth } from '../components/Auth';
+import { BackupRestore } from '../components/BackupRestore';
+import { supabase } from '../utils/supabaseClient';
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Package, CheckCheck, RefreshCcw, BarChart3, 
-  EyeOff, Trash2, Plus, ChevronUp, ChevronDown, PieChart, ListOrdered, Sparkles, RotateCcw, Moon, Sun, MapPin, Store, History
+  Trash2, Plus, Sparkles, Moon, Sun, LogOut, Loader2,
+  ListOrdered, History, ShoppingCart
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
-import { AddItemForm } from './components/AddItemForm';
 import { GroceryItem } from './types';
-import { BackupRestore } from '../components/BackupRestore';
-import {
-  saveToLocalStorage,
-  loadFromLocalStorage,
-} from './utils/groceryUtils';
 
-// --- 1. LOGO COMPONENT ---
-const SpeedCartIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} preserveAspectRatio="xMidYMid meet">
-    <path d="M1 13H5M2 9H4M0 17H6" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" className="animate-pulse" />
-    <path d="M10 10C10 10 9 4 12 4C15 4 14 10 14 10" fill="#22c55e" />
-    <rect x="14" y="4" width="5" height="7" rx="1" fill="#f97316" />
-    <circle cx="11" cy="9" r="3" fill="#ef4444" />
-    <path d="M6 7H22L19 15H8.5L6 7Z" fill="#3b82f6" />
-    <path d="M3 3H5.5L8.5 15L9.5 18H18" stroke="#1e293b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <circle cx="11" cy="20" r="2" fill="#1e293b" /><circle cx="17" cy="20" r="2" fill="#1e293b" />
-    <circle cx="11" cy="20" r="1" fill="#e2e8f0" /><circle cx="17" cy="20" r="1" fill="#e2e8f0" />
-  </svg>
-);
+// --- HELPERS (Categories & Emojis) ---
+const EMOJI_MAP: Record<string, string> = {
+  onion: "🧅", tomato: "🍅", milk: "🥛", bread: "🍞", chicken: "🍗", eggs: "🥚", apple: "🍎", banana: "🍌", 
+  diaper: "🧷", formula: "🍼", wipe: "🧻", coffee: "☕", water: "💧", beer: "🍺"
+};
 
-// --- 2. HELPERS & ENGINE (UNCHANGED) ---
-const getAutoCategory = (name: string): string | null => {
+const getAutoCategory = (name: string): string => {
   const lower = name.toLowerCase();
   const categoryKeywords: Record<string, string[]> = {
-    "🥬 Produce": ["onion", "tomato", "potato", "apple", "banana", "orange", "grape", "spinach", "lettuce", "broccoli", "carrot", "garlic", "ginger", "pepper", "mushroom", "berry", "lemon", "lime", "avocado", "cilantro", "coriander", "okra", "palak", "fruit", "veg", "salad", "watermelon", "strawberry", "blueberry", "melon", "cherry", "peach", "mango", "pineapple", "coconut", "kiwi", "eggplant", "corn", "cucumber", "beet"],
-    "🥛 Dairy & Eggs": ["milk", "cheese", "egg", "butter", "yogurt", "yoghurt", "cream", "paneer", "dahi", "curd"],
-    "🥩 Meat & Seafood": ["chicken", "beef", "pork", "fish", "salmon", "bacon", "sausage", "meat", "shrimp", "prawn", "turkey"],
-    "🍞 Bakery": ["bread", "bun", "roll", "bagel", "muffin", "cake", "croissant", "pastry", "pita", "tortilla", "baguette", "pretzel", "pancake", "waffle", "sourdough"],
-    "🍝 Pasta & Grains": ["pasta", "noodle", "spaghetti", "macaroni", "penne", "fusilli", "ramen", "maggi", "lasagna", "sauce", "marinara", "alfredo", "pesto"],
-    "🥜 Nuts & Seeds": ["nut", "peanut", "almond", "cashew", "walnut", "pecan", "seed", "pistachio"],
-    "🥫 Pantry": ["rice", "dal", "lentil", "flour", "atta", "sugar", "salt", "spice", "oil", "ghee", "vinegar", "cereal", "oat", "honey", "jam", "peanut butter", "chana", "basmati", "bean", "can", "soup"],
-    "❄️ Frozen Foods": ["pizza", "ice cream", "frozen", "popsicle"],
-    "🍿 Snacks & Candy": ["chip", "cookie", "cracker", "candy", "chocolate", "popcorn", "snack", "gum"],
-    "🥤 Beverages & Coffee": ["water", "juice", "soda", "pop", "coffee", "tea", "beer", "wine", "liquor", "drink"],
-    "🧼 Household & Cleaning": ["paper towel", "toilet paper", "trash", "soap", "detergent", "clean", "foil", "wrap", "sponge", "tissue", "bleach"],
-    "🧴 Personal & Pet Care": ["shampoo", "toothpaste", "brush", "lotion", "deodorant", "dog", "cat", "pet", "pad", "tampon", "body wash"],
-    "💊 Health & Pharmacy": ["pill", "tablet", "medicine", "vitamin", "tylenol", "advil", "ibuprofen", "band-aid", "pharmacy", "drug", "supplement", "health", "cold", "flu"],
-    "👶 Baby": ["diaper", "wipe", "formula", "baby food", "pacifier", "soother", "nappy", "bottle"]
+    "🥬 Produce": ["onion", "tomato", "potato", "apple", "banana", "spinach", "lettuce", "garlic", "fruit", "veg"],
+    "🥛 Dairy & Eggs": ["milk", "cheese", "egg", "butter", "yogurt", "cream", "paneer"],
+    "🥩 Meat & Seafood": ["chicken", "beef", "pork", "fish", "salmon", "bacon", "meat"],
+    "🍞 Bakery": ["bread", "bun", "bagel", "muffin", "cake", "pita", "tortilla"],
+    "👶 Baby": ["diaper", "wipe", "formula", "baby food", "pacifier", "soother"],
+    "🧼 Household": ["paper towel", "toilet paper", "soap", "detergent", "clean", "foil", "trash"],
+    "🥫 Pantry": ["rice", "dal", "flour", "sugar", "salt", "spice", "oil", "ghee", "cereal", "oat", "honey"]
   };
   for (const [category, keywords] of Object.entries(categoryKeywords)) {
     if (keywords.some(keyword => lower.includes(keyword))) return category;
   }
-  return null;
-};
-
-const EMOJI_MAP: Record<string, string> = {
-  apple: "🍎", "green apple": "🍏", banana: "🍌", orange: "🍊", lemon: "🍋", lime: "🍈",
-  watermelon: "🍉", grape: "🍇", strawberry: "🍓", blueberry: "🫐", melon: "🍈", cherry: "🍒",
-  peach: "🍑", mango: "🥭", pineapple: "🍍", coconut: "🥥", kiwi: "🥝", tomato: "🍅",
-  eggplant: "🍆", potato: "🥔", carrot: "🥕", corn: "🌽", pepper: "🌶️", "bell pepper": "🫑",
-  cucumber: "🥒", lettuce: "🥬", spinach: "🥬", broccoli: "🥦", garlic: "🧄", onion: "🧅",
-  mushroom: "🍄", ginger: "🫚", okra: "🎋", palak: "🥬", cilantro: "🌿", coriander: "🌿", avocado: "🥑", beet: "🍠",
-  milk: "🥛", cheese: "🧀", egg: "🥚", butter: "🧈", yogurt: "🍦", curd: "🥣", dahi: "🥣", paneer: "🧀",
-  chicken: "🍗", meat: "🥩", beef: "🥩", pork: "🥩", bacon: "🥓", fish: "🐟",
-  salmon: "🍣", shrimp: "🦐", prawn: "🍤", turkey: "🦃", sausage: "🌭",
-  bread: "🍞", croissant: "🥐", baguette: "🥖", pretzel: "🥨", bagel: "🥯", sourdough: "🥖",
-  pancake: "🥞", waffle: "🧇", bun: "🥯", roll: "🥐", pastry: "🥐", cake: "🍰",
-  peanut: "🥜", nut: "🌰", almond: "🌰", cashew: "🌰", walnut: "🌰", pecan: "🌰", pistachio: "🌰",
-  pasta: "🍝", noodle: "🍜", spaghetti: "🍝", ramen: "🍜", "pasta sauce": "🥫", sauce: "🥫",
-  rice: "🍚", dal: "🥣", lentil: "🥣", flour: "🌾",
-  atta: "🌾", salt: "🧂", spice: "🌶️", oil: "🛢️", honey: "🍯", jam: "🍯",
-  soup: "🍲", cereal: "🥣", can: "🥫", bean: "🫘", "peanut butter": "🥜",
-  pizza: "🍕", "ice cream": "🍨", frozen: "🧊", popsicle: "🍧", chip: "🍟", chips: "🍟",
-  cookie: "🍪", cracker: "🍘", candy: "🍬", chocolate: "🍫", popcorn: "🍿", snack: "🥨",
-  water: "💧", juice: "🧃", soda: "🥤", pop: "🥤", coffee: "☕", tea: "🍵",
-  beer: "🍺", wine: "🍷", liquor: "🥃", drink: "🍹",
-  "paper towel": "🧻", "toilet paper": "🧻", soap: "🧼", sponge: "🧽", detergent: "🧼", bleach: "🧴",
-  diaper: "🧷", formula: "🍼", wipe: "🧻", pet: "🐕", dog: "🐕", cat: "🐈", toothpaste: "🪥", shampoo: "🧴", lotion: "🧴", deodorant: "🧴",
-  pill: "💊", tablet: "💊", medicine: "💊", vitamin: "💊", tylenol: "💊", advil: "💊", ibuprofen: "💊", "band-aid": "🩹", pharmacy: "⚕️"
+  return "📦 Other";
 };
 
 const GROCERY_CATEGORIES = ["🥬 Produce", "🥛 Dairy & Eggs", "🥩 Meat & Seafood", "🍞 Bakery", "🍝 Pasta & Grains", "🥜 Nuts & Seeds", "🥫 Pantry", "❄️ Frozen Foods", "🍿 Snacks & Candy", "🥤 Beverages & Coffee", "🧼 Household & Cleaning", "🧴 Personal & Pet Care", "💊 Health & Pharmacy", "👶 Baby", "📦 Other"];
 const PRESET_STORES = ["Costco", "FreshCo", "No Frills", "Walmart", "SDM", "Other"];
 
-const STORE_DOMAINS: Record<string, string> = {
-  "Costco": "costco.ca", "FreshCo": "freshco.com", "No Frills": "nofrills.ca", "Walmart": "walmart.ca", "SDM": "shoppersdrugmart.ca"
-};
-
-const STORE_COLORS: Record<string, { text: string, bg: string, border: string, badge: string }> = {
-  "Costco": { text: "text-red-700 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/40", border: "border-red-200 dark:border-red-900/50", badge: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400" },
-  "FreshCo": { text: "text-green-700 dark:text-green-400", bg: "bg-green-50 dark:bg-green-950/40", border: "border-green-200 dark:border-green-900/50", badge: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400" },
-  "No Frills": { text: "text-yellow-700 dark:text-yellow-400", bg: "bg-yellow-50 dark:bg-yellow-950/40", border: "border-yellow-200 dark:border-yellow-900/50", badge: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400" },
-  "Walmart": { text: "text-blue-700 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-950/40", border: "border-blue-200 dark:border-blue-900/50", badge: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400" },
-  "SDM": { text: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/40", border: "border-red-200 dark:border-red-900/50", badge: "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400" },
-  "Other": { text: "text-purple-700 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-950/40", border: "border-purple-200 dark:border-purple-900/50", badge: "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-400" }
-};
-
-const getStoreColor = (storeName?: string) => {
-  if (!storeName || storeName === "Any Store") {
-    return { text: "text-slate-500 dark:text-slate-400", bg: "bg-slate-50 dark:bg-slate-800/50", border: "border-slate-200 dark:border-slate-700", badge: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" };
-  }
-  return STORE_COLORS[storeName] || STORE_COLORS["Other"];
-};
-
-const normalizeName = (name: string) => {
-  if (!name) return "";
-  const clean = name.replace(/[^\w\s]/gi, "").trim().toLowerCase();
-  if (clean.endsWith('ies')) return clean.slice(0, -3) + 'y'; 
-  if (clean.endsWith('es')) return clean.slice(0, -2);
-  if (clean.endsWith('s') && !clean.endsWith('ss')) return clean.slice(0, -1);
-  return clean;
-};
+const normalizeName = (name: string) => name.toLowerCase().replace(/[^\w\s]/gi, "").trim();
 
 const getTimeAgo = (dateString: string | undefined) => {
-  if (!dateString) return "First time purchase";
+  if (!dateString) return "First purchase";
   const diffDays = Math.floor((new Date().getTime() - new Date(dateString).getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return "Purchased today";
-  if (diffDays === 1) return "Purchased yesterday";
-  if (diffDays < 7) return `Purchased ${diffDays} days ago`;
-  if (diffDays < 30) return `Purchased ${Math.floor(diffDays / 7)} weeks ago`;
-  return `Purchased ${Math.floor(diffDays / 30)} months ago`;
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return `${diffDays}d ago`;
 };
 
-const StoreLogo = ({ storeName, className = "" }: { storeName: string, className?: string }) => {
-  const domain = STORE_DOMAINS[storeName];
-  if (!domain) return <MapPin className={`w-3 h-3 flex-shrink-0 ${className}`} />;
-  return (
-    <img 
-      src={`https://www.google.com/s2/favicons?sz=64&domain=${domain}`} 
-      alt={`${storeName} logo`} 
-      className={`w-3.5 h-3.5 rounded-full bg-white p-[1px] object-contain flex-shrink-0 ${className}`} 
-      onError={(e) => {
-        e.currentTarget.style.display = 'none';
-        e.currentTarget.parentElement?.insertAdjacentHTML('beforeend', `<svg class="w-3 h-3 ${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`);
-      }}
-    />
-  );
-};
-
-// --- 3. MAIN APP COMPONENT ---
+// --- MAIN APPLICATION ---
 export default function App() {
+  const [session, setSession] = useState<any>(null);
   const [items, setItems] = useState<GroceryItem[]>([]);
-  const [categoryPrefs, setCategoryPrefs] = useState<Record<string, string>>({});
-  const [storePrefs, setStorePrefs] = useState<Record<string, string>>({});
-  const [emojiPrefs, setEmojiPrefs] = useState<Record<string, string>>({});
-  const [categoryOrder, setCategoryOrder] = useState<string[]>(GROCERY_CATEGORIES);
-  const [showStats, setShowStats] = useState(true);
-  const [statView, setStatView] = useState<'items' | 'categories' | 'stores'>('items');
-  const [expandedStat, setExpandedStat] = useState<string | null>(null);
-  const [showAllItems, setShowAllItems] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
-  const [isBouncing, setIsBouncing] = useState(false);
-  const [activeMenu, setActiveMenu] = useState<{id: string, type: 'category' | 'store'} | null>(null);
+  const [animatingId, setAnimatingId] = useState<string | null>(null);
+  const [isMigrating, setIsMigrating] = useState(false);
 
+  // 1. Auth & Session Watcher
   useEffect(() => {
-    setItems(loadFromLocalStorage());
-    if (localStorage.getItem('groceryCategoryPrefs')) setCategoryPrefs(JSON.parse(localStorage.getItem('groceryCategoryPrefs')!));
-    if (localStorage.getItem('groceryStorePrefs')) setStorePrefs(JSON.parse(localStorage.getItem('groceryStorePrefs')!));
-    if (localStorage.getItem('groceryEmojiPrefs')) setEmojiPrefs(JSON.parse(localStorage.getItem('groceryEmojiPrefs')!));
-    if (localStorage.getItem('groceryTheme') === 'dark') setDarkMode(true);
-    if (localStorage.getItem('groceryCategoryOrder')) setCategoryOrder(Array.from(new Set([...JSON.parse(localStorage.getItem('groceryCategoryOrder')!), ...GROCERY_CATEGORIES])));
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => { saveToLocalStorage(items); }, [items]);
-  useEffect(() => { localStorage.setItem('groceryCategoryPrefs', JSON.stringify(categoryPrefs)); }, [categoryPrefs]);
-  useEffect(() => { localStorage.setItem('groceryStorePrefs', JSON.stringify(storePrefs)); }, [storePrefs]);
-  useEffect(() => { localStorage.setItem('groceryEmojiPrefs', JSON.stringify(emojiPrefs)); }, [emojiPrefs]);
-  useEffect(() => { localStorage.setItem('groceryTheme', darkMode ? 'dark' : 'light'); }, [darkMode]);
-  useEffect(() => { localStorage.setItem('groceryCategoryOrder', JSON.stringify(categoryOrder)); }, [categoryOrder]);
+  // 2. Fetch Data from Cloud
+  useEffect(() => {
+    const fetchItems = async () => {
+      if (!session?.user) return;
+      const { data, error } = await supabase
+        .from('grocery_items')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false });
+      if (data) setItems(data);
+      if (error) toast.error("Cloud fetch failed");
+    };
+    fetchItems();
+  }, [session]);
 
+  // 3. Predictive Suggestion Engine
   const suggestions = useMemo(() => {
     const today = new Date().getTime();
     return items.filter(item => {
-      if (!item.isHistory || (item.purchaseDates || []).length < 2) return false;
-      const dates = item.purchaseDates!.map(d => new Date(d).getTime()).sort((a, b) => a - b);
-      const avgIntervalDays = ((dates[dates.length - 1] - dates[0]) / (dates.length - 1)) / 86400000;
-      return ((today - dates[dates.length - 1]) / 86400000) >= avgIntervalDays;
+      if (!item.is_history || (item.purchase_dates || []).length < 2) return false;
+      const dates = item.purchase_dates!.map(d => new Date(d).getTime()).sort((a, b) => a - b);
+      const avgInterval = ((dates[dates.length - 1] - dates[0]) / (dates.length - 1)) / 86400000;
+      return ((today - dates[dates.length - 1]) / 86400000) >= avgInterval;
     }).slice(0, 5);
   }, [items]);
 
-  const handleAddItem = (rawInputName: string, manualCategory?: string, manualStore?: string, forceAdd = false) => {
-    if (!rawInputName.trim()) return;
-    const emojiRegex = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu;
-    const extractedEmojis = rawInputName.match(emojiRegex);
-    const customEmoji = extractedEmojis ? extractedEmojis.join('') : null;
-    const cleanName = rawInputName.replace(emojiRegex, '').trim();
-    if (!cleanName) return; 
-    const normName = normalizeName(cleanName);
-    const existing = items.find(i => !i.isHistory && normalizeName(i.name) === normName);
-    if (existing && !forceAdd) {
-      toast.error(`"${cleanName}" is already here!`, { action: { label: "Add Anyway", onClick: () => handleAddItem(rawInputName, manualCategory, manualStore, true) } });
-      return;
-    }
-    const finalEmoji = customEmoji || emojiPrefs[normName] || EMOJI_MAP[normName] || "";
-    const displayName = finalEmoji ? `${cleanName} ${finalEmoji}` : cleanName;
-    const finalCategory = manualCategory || categoryPrefs[normName] || getAutoCategory(cleanName) || "📦 Other";
-    const finalStore = manualStore || storePrefs[normName] || "";
-    const historyItem = items.find(i => i.isHistory && normalizeName(i.name) === normName);
-    if (historyItem) {
-      setItems(prev => prev.map(i => i.id === historyItem.id ? { ...i, name: displayName, isHistory: false, checkedOut: false, category: finalCategory, store: finalStore } : i));
+  // --- ACTIONS & HANDLERS ---
+
+  const migrateLocalToCloud = async () => {
+    const localData = localStorage.getItem('groceryItems');
+    if (!localData || !session?.user) return;
+    
+    setIsMigrating(true);
+    const localItems = JSON.parse(localData);
+    
+    const formatted = localItems.map((i: any) => ({
+      name: i.name,
+      category: i.category || "📦 Other",
+      store: i.store || "",
+      purchase_count: i.purchaseCount || i.purchase_count || 0,
+      purchase_dates: i.purchaseDates || i.purchase_dates || [],
+      is_history: i.isHistory || i.is_history || false,
+      checked_out: i.checkedOut || i.checked_out || false,
+      user_id: session.user.id
+    }));
+
+    const { error } = await supabase.from('grocery_items').insert(formatted);
+    if (!error) {
+      toast.success("Successfully migrated to Cloud!");
+      localStorage.removeItem('groceryItems');
+      window.location.reload(); 
     } else {
-      setItems(prev => [{ id: Date.now().toString(), name: displayName, category: finalCategory, store: finalStore, purchaseCount: 0, purchaseDates: [], checkedOut: false, isHistory: false, addedAt: new Date().toISOString() }, ...prev]);
+      toast.error("Migration failed");
     }
-    if (customEmoji) setEmojiPrefs(prev => ({ ...prev, [normName]: customEmoji }));
-    if (manualCategory) setCategoryPrefs(prev => ({ ...prev, [normName]: manualCategory }));
-    if (manualStore && manualStore !== "Any Store") setStorePrefs(prev => ({ ...prev, [normName]: manualStore }));
-    toast.success(`Added ${cleanName}`);
+    setIsMigrating(false);
   };
 
-  const handleCheckout = (id: string) => {
-    setIsBouncing(true); setTimeout(() => setIsBouncing(false), 250);
-    setItems(prev => prev.map(i => i.id === id ? { ...i, checkedOut: true, purchaseCount: (i.purchaseCount || 0) + 1, purchaseDates: [...(i.purchaseDates || []), new Date().toISOString()] } : i));
+  const handleAddItem = async (name: string, manualCategory?: string, manualStore?: string) => {
+    if (!name.trim() || !session?.user) return;
+    
+    const normName = normalizeName(name);
+    const finalEmoji = EMOJI_MAP[normName] || "";
+    const displayName = finalEmoji ? `${name} ${finalEmoji}` : name;
+
+    const { data, error } = await supabase.from('grocery_items').insert([{
+      name: displayName,
+      category: manualCategory || getAutoCategory(name),
+      store: manualStore || "",
+      user_id: session.user.id
+    }]).select();
+
+    if (data) setItems(prev => [data[0], ...prev]);
   };
 
-  const handleCompleteTrip = () => {
-    setItems(prev => prev.map(i => i.checkedOut ? { ...i, checkedOut: false, isHistory: true } : i));
-    toast.success(`Trip completed!`);
+  const handleAddWithSparkle = async (name: string, id: string) => {
+    setAnimatingId(id);
+    const cleanName = name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim();
+    await handleAddItem(cleanName);
+    setTimeout(() => setAnimatingId(null), 800);
   };
 
-  const handleUpdateCategory = (id: string, newCategory: string) => {
-    setItems(prev => prev.map(i => i.id === id ? { ...i, category: newCategory } : i));
+  const handleCheckout = async (id: string) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    const { error } = await supabase.from('grocery_items').update({ 
+      checked_out: true, 
+      purchase_count: (item.purchase_count || 0) + 1,
+      purchase_dates: [...(item.purchase_dates || []), new Date().toISOString()]
+    }).eq('id', id);
+
+    if (!error) setItems(prev => prev.map(i => i.id === id ? { ...i, checked_out: true } : i));
   };
 
-  const handleUpdateStore = (id: string, newStore: string) => {
-    setItems(prev => prev.map(i => i.id === id ? { ...i, store: newStore } : i));
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase.from('grocery_items').delete().eq('id', id);
+    if (!error) setItems(prev => prev.filter(i => i.id !== id));
   };
 
-  const moveCategoryUp = (cat: string) => {
-    const idx = categoryOrder.indexOf(cat);
-    if (idx > 0) { const newOrder = [...categoryOrder]; [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]]; setCategoryOrder(newOrder); }
+  const handleCompleteTrip = async () => {
+    const checkedItems = items.filter(i => i.checked_out && !i.is_history);
+    if (checkedItems.length === 0) return;
+
+    const updates = checkedItems.map(i => ({ ...i, checked_out: false, is_history: true }));
+    const { error } = await supabase.from('grocery_items').upsert(updates);
+    
+    if (!error) {
+      setItems(prev => prev.map(i => i.checked_out ? { ...i, checked_out: false, is_history: true } : i));
+      toast.success("Trip completed! Items moved to History.");
+    }
   };
-  const moveCategoryDown = (cat: string) => {
-    const idx = categoryOrder.indexOf(cat);
-    if (idx < categoryOrder.length - 1) { const newOrder = [...categoryOrder]; [newOrder[idx + 1], newOrder[idx]] = [newOrder[idx], newOrder[idx + 1]]; setCategoryOrder(newOrder); }
-  };
 
-  const activeItems = items.filter(i => !i.isHistory && !i.checkedOut);
-  const cartItems = items.filter(i => i.checkedOut && !i.isHistory);
-  const historyItems = items.filter(i => i.isHistory);
-  const grouped = activeItems.reduce((acc, i) => { const cat = i.category || "📦 Other"; if (!acc[cat]) acc[cat] = []; acc[cat].push(i); return acc; }, {} as Record<string, GroceryItem[]>);
-  const sortedCats = Object.keys(grouped).sort((a, b) => categoryOrder.indexOf(a) - categoryOrder.indexOf(b));
+  // --- UI GROUPING ---
+  const activeItems = items.filter(i => !i.is_history && !i.checked_out);
+  const cartItems = items.filter(i => i.checked_out && !i.is_history);
+  const historyItems = items.filter(i => i.is_history);
+  
+  const grouped = activeItems.reduce((acc, i) => {
+    const cat = i.category || "📦 Other";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(i);
+    return acc;
+  }, {} as Record<string, GroceryItem[]>);
 
-  const allItemsData = React.useMemo(() => {
-    const stats = items.reduce((acc, item) => {
-      const count = item.purchaseDates?.length || item.purchaseCount || 0;
-      if (count > 0) acc[item.name] = (acc[item.name] || 0) + count;
-      return acc;
-    }, {} as Record<string, number>);
-    return Object.entries(stats).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
-  }, [items]);
-
-  const categoryData = React.useMemo(() => {
-    const stats = items.reduce((acc, item) => {
-      const count = item.purchaseDates?.length || item.purchaseCount || 0;
-      if (count > 0) { 
-        const cat = item.category || "📦 Other"; 
-        if (!acc[cat]) acc[cat] = { count: 0, items: new Set<string>() };
-        acc[cat].count += count; 
-        acc[cat].items.add(item.name);
-      }
-      return acc;
-    }, {} as Record<string, { count: number, items: Set<string> }>);
-    return Object.entries(stats).map(([name, data]) => ({ name, count: data.count, items: Array.from(data.items) })).sort((a, b) => b.count - a.count);
-  }, [items]);
-
-  const storeData = React.useMemo(() => {
-    const stats = items.reduce((acc, item) => {
-      const count = item.purchaseDates?.length || item.purchaseCount || 0;
-      if (count > 0) { 
-        const st = item.store || "Unassigned"; 
-        if (!acc[st]) acc[st] = { count: 0, items: new Set<string>() };
-        acc[st].count += count; 
-        acc[st].items.add(item.name);
-      }
-      return acc;
-    }, {} as Record<string, { count: number, items: Set<string> }>);
-    return Object.entries(stats).map(([name, data]) => ({ name, count: data.count, items: Array.from(data.items) })).sort((a, b) => b.count - a.count);
-  }, [items]);
-
-  const displayedItems = showAllItems ? allItemsData : allItemsData.slice(0, 15);
+  if (!session) return <div className={darkMode ? 'dark' : ''}><Auth /></div>;
 
   return (
-    <div className={`min-h-screen p-4 sm:p-6 lg:p-8 flex flex-col transition-colors duration-300 ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-background text-foreground'}`}>
+    <div className={`min-h-screen p-4 sm:p-8 transition-colors duration-300 ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       <Toaster position="top-center" richColors theme={darkMode ? 'dark' : 'light'} />
-      <div className="max-w-7xl mx-auto flex-1 w-full">
+      <div className="max-w-4xl mx-auto space-y-6">
         
-        {/* --- REFACTORED HEADER WITH GLOBAL CONTROL PILL --- */}
-        <header className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className={`p-1 rounded-2xl border shadow-md transition-all duration-200 ${isBouncing ? 'scale-110 -rotate-6' : 'scale-100 rotate-0'} ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-[#bbf7d0]'}`}>
-              <SpeedCartIcon className="w-16 h-16 sm:w-20 sm:h-20" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-black tracking-tight uppercase leading-none italic transform -skew-x-12 text-primary">Grocery Run</h1>
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] mt-2">Smart. Organic. Adaptive.</p>
-            </div>
+        {/* HEADER */}
+        <header className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-black italic tracking-tighter text-blue-600 truncate">GROCERY RUN</h1>
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40">Cloud Sync Enabled</p>
           </div>
-
-          <div className="flex items-center gap-2">
-            {/* Global Control Pill Container */}
-            <div className={`flex items-center gap-1 p-1 rounded-full border shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-              <BackupRestore />
-              <div className="w-px h-4 bg-slate-200 dark:bg-slate-800 mx-1" />
-              <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-full transition-all hover:bg-slate-100 dark:hover:bg-slate-800 ${darkMode ? 'text-yellow-400' : 'text-slate-600'}`}>
-                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </button>
-            </div>
-
-            <button onClick={() => setShowStats(!showStats)} className="flex items-center gap-2 text-[10px] px-5 py-2.5 rounded-full font-black border border-primary/20 bg-primary/10 text-primary transition-all">
-              {showStats ? <BarChart3 className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}{showStats ? "SHOW STATS" : "HIDE STATS"}
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-1.5 rounded-full shadow-sm border border-slate-200 dark:border-slate-800">
+            <BackupRestore />
+            <button onClick={() => setDarkMode(!darkMode)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+              {darkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-500" />}
+            </button>
+            <button onClick={() => supabase.auth.signOut()} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full text-slate-400 hover:text-red-500">
+              <LogOut className="w-5 h-5" />
             </button>
           </div>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className={`${showStats ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-6`}>
-            
-            {/* Suggestions Bar */}
-            {suggestions.length > 0 && (
-              <div className={`rounded-xl border p-4 border-dashed animate-in fade-in slide-in-from-top-4 duration-500 ${darkMode ? 'bg-blue-900/10 border-blue-800/50' : 'bg-blue-50/50 border-blue-200'}`}>
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-3 flex items-center gap-2"><Sparkles className="w-3 h-3" /> Running Low?</h3>
-                <div className="flex flex-wrap gap-2">
-                  {suggestions.map(item => (
-                    <button key={item.id} onClick={() => handleAddItem(item.name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim())} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all hover:scale-105 active:scale-95 ${darkMode ? 'bg-slate-900 border-slate-700 hover:border-primary' : 'bg-white border-slate-200 hover:border-primary shadow-sm'}`}>
-                      {item.name} <Plus className="w-3 h-3 text-primary" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+        {/* MIGRATION BANNER */}
+        {localStorage.getItem('groceryItems') && (
+          <button onClick={migrateLocalToCloud} disabled={isMigrating} className="w-full py-3 bg-amber-50 dark:bg-amber-900/10 border border-dashed border-amber-300 rounded-2xl text-[10px] font-black uppercase tracking-widest text-amber-600 flex items-center justify-center gap-2 animate-pulse">
+            {isMigrating ? <Loader2 className="w-3 h-3 animate-spin" /> : "⚠️ Migrate Local List to Cloud"}
+          </button>
+        )}
 
-            <div className={`rounded-xl border p-6 shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-card'}`}>
-              <AddItemForm onAddItem={(n, c, s) => handleAddItem(n, c, s)} categories={categoryOrder} stores={PRESET_STORES} />
+        {/* SUGGESTIONS BAR */}
+        {suggestions.length > 0 && (
+          <div className="p-4 rounded-2xl border-2 border-dashed border-blue-200 dark:border-blue-900/30 bg-blue-50/50 dark:bg-blue-900/10">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-3 flex items-center gap-2"><Sparkles className="w-3 h-3" /> Habits Suggest:</h3>
+            <div className="flex flex-wrap gap-2">
+              {suggestions.map(item => (
+                <button 
+                  key={item.id} 
+                  onClick={() => handleAddWithSparkle(item.name, item.id)} 
+                  className={`px-3 py-1.5 border rounded-full text-xs font-bold transition-all relative ${animatingId === item.id ? 'scale-110 bg-blue-500 text-white border-blue-500' : 'bg-white dark:bg-slate-900 hover:border-blue-300'}`}
+                >
+                  {item.name} {animatingId === item.id ? <Sparkles className="inline w-3 h-3 ml-1" /> : <Plus className="inline w-3 h-3 ml-1 text-blue-500" />}
+                </button>
+              ))}
             </div>
-
-            <Tabs defaultValue="active" className="w-full">
-              <TabsList className={`grid w-full grid-cols-3 ${darkMode ? 'bg-slate-900' : ''}`}>
-                <TabsTrigger value="active">List ({activeItems.length})</TabsTrigger>
-                <TabsTrigger value="cart">Cart ({cartItems.length})</TabsTrigger>
-                <TabsTrigger value="history">Habits</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="active" className="mt-6 space-y-6">
-                {activeItems.length === 0 ? (
-                  <div className="text-center py-20 italic text-sm opacity-40"><Package className="w-12 h-12 mx-auto mb-3" /><p>Your harvest list is empty.</p></div>
-                ) : (
-                  <>
-                  {sortedCats.map(cat => (
-                    <div key={cat} className={`rounded-xl p-4 border border-dashed mb-4 ${darkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-card/40 border-muted'}`}>
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-black text-[10px] text-primary flex items-center gap-2 uppercase tracking-widest opacity-60">
-                          {cat} <span className="font-normal bg-muted px-2 py-0.5 rounded-full">{grouped[cat].length}</span>
-                        </h3>
-                        <div className="flex gap-1">
-                          <button onClick={() => moveCategoryUp(cat)} className="p-1"><ChevronUp className="w-3.5 h-3.5 opacity-50 hover:opacity-100" /></button>
-                          <button onClick={() => moveCategoryDown(cat)} className="p-1"><ChevronDown className="w-3.5 h-3.5 opacity-50 hover:opacity-100" /></button>
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        {grouped[cat].map(item => {
-                          const isStoreMenu = activeMenu?.id === item.id && activeMenu.type === 'store';
-                          const hasStoreAssigned = Boolean(item.store && item.store !== "Any Store");
-                          const storeColors = getStoreColor(item.store);
-                          return (
-                          <div key={item.id} className={`flex flex-col p-4 border rounded-xl shadow-sm transition-all ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white'}`}>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3 overflow-hidden flex-1">
-                                <button onClick={() => handleCheckout(item.id)} className="p-1 rounded-full border-2 border-primary/20 text-transparent hover:text-primary"><CheckCheck className="w-4 h-4"/></button>
-                                <div>
-                                  <span className="font-semibold text-[13px] truncate block">{item.name}</span>
-                                  <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                                    <History className="w-2.5 h-2.5" /> {getTimeAgo(item.purchaseDates?.[item.purchaseDates.length - 1])}
-                                  </span>
-                                </div>
-                              </div>
-                              <button onClick={() => setItems(items.filter(i => i.id !== item.id))} className="p-2 text-red-400 lg:opacity-0 hover:opacity-100"><Trash2 className="w-5 h-5" /></button>
-                            </div>
-                            <div className="flex gap-2 mt-2">
-                              <button onClick={() => setActiveMenu(activeMenu?.id === item.id && activeMenu.type === 'category' ? null : {id: item.id, type: 'category'})} className={`flex-1 px-3 py-2 rounded-lg text-[9px] font-bold uppercase border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                                {item.category}
-                              </button>
-                              <button onClick={() => setActiveMenu(isStoreMenu ? null : {id: item.id, type: 'store'})} className={`flex-1 flex items-center justify-between px-3 py-2 rounded-lg text-[9px] font-bold uppercase border ${hasStoreAssigned ? `${storeColors.bg} ${storeColors.text} border-transparent` : darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                                {hasStoreAssigned && <StoreLogo storeName={item.store!} />}
-                                {hasStoreAssigned ? item.store : "From"}
-                                <ChevronDown className="w-3 h-3" />
-                              </button>
-                            </div>
-                            {activeMenu?.id === item.id && (
-                              <div className="mt-3 pt-3 border-t border-dashed animate-in fade-in slide-in-from-top-2 duration-200">
-                                {activeMenu.type === 'category' ? (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {categoryOrder.map(c => (
-                                      <button key={c} onClick={() => { handleUpdateCategory(item.id, c); setActiveMenu(null); }} className={`text-[10px] px-2.5 py-1.5 rounded-md border font-semibold ${item.category === c ? 'bg-primary text-white border-primary shadow-sm' : darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}>{c}</button>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {PRESET_STORES.map(s => {
-                                      const chipColors = STORE_COLORS[s] || STORE_COLORS["Other"];
-                                      const isSelected = item.store === s;
-                                      return (
-                                        <button key={s} onClick={() => { handleUpdateStore(item.id, isSelected ? "" : s); setActiveMenu(null); }} className={`flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-md border font-semibold ${isSelected ? `${chipColors.bg} ${chipColors.text} ${chipColors.border} shadow-sm ring-1 ring-inset ${chipColors.border}` : darkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600' : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300'}`}><StoreLogo storeName={s} />{s}</button>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )})}
-                      </div>
-                    </div>
-                  ))}
-                  </>
-                )}
-              </TabsContent>
-
-              <TabsContent value="cart" className="mt-6 space-y-3">
-                {cartItems.length > 0 && <button onClick={handleCompleteTrip} className="w-full mb-4 bg-primary text-white p-4 rounded-xl font-black uppercase tracking-widest shadow-lg">Complete Trip</button>}
-                {cartItems.map(item => (
-                  <div key={item.id} className={`flex items-center justify-between p-4 border rounded-xl opacity-60 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white'}`}>
-                    <div>
-                      <span className="font-semibold text-[13px] line-through block">{item.name}</span>
-                      <span className="text-[9px] font-bold opacity-50 mt-1 block">{getTimeAgo(item.purchaseDates?.[item.purchaseDates.length - 1])}</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => setItems(items.map(i => i.id === item.id ? {...i, checkedOut: false} : i))} className="p-2 text-primary"><RefreshCcw className="w-4 h-4"/></button>
-                      <button onClick={() => setItems(items.filter(i => i.id !== item.id))} className="p-2 text-red-400"><Trash2 className="w-5 h-5" /></button>
-                    </div>
-                  </div>
-                ))}
-              </TabsContent>
-
-              <TabsContent value="history" className="mt-6 space-y-3">
-                {/* REMOVED BACKUPRESTORE FROM HERE TO KEEP THE TAB CLEAN */}
-                {historyItems.map(item => (
-                  <div key={item.id} className={`flex items-center justify-between p-4 border rounded-xl opacity-80 shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-card'}`}>
-                    <div>
-                      <span className="font-semibold text-[13px] block">{item.name}</span>
-                      <span className="text-[10px] font-black uppercase opacity-50 mt-1 block">{getTimeAgo(item.purchaseDates?.[item.purchaseDates.length - 1])}</span>
-                    </div>
-                    <button onClick={() => handleAddItem(item.name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim(), undefined, undefined, true)} className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors"><RefreshCcw className="w-5 h-5" /></button>
-                  </div>
-                ))}
-              </TabsContent>
-            </Tabs>
           </div>
-          
-          {/* --- STATS PANEL --- */}
-          {showStats && (
-            <div className="lg:col-span-1 space-y-4">
-              <div className={`p-1 flex rounded-lg border shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
-                <button onClick={() => setStatView('items')} className={`flex-1 text-[10px] font-bold py-2 rounded-md ${statView === 'items' ? 'bg-white dark:bg-slate-800 text-primary shadow' : 'text-slate-400'}`}>Items</button>
-                <button onClick={() => setStatView('categories')} className={`flex-1 text-[10px] font-bold py-2 rounded-md ${statView === 'categories' ? 'bg-white dark:bg-slate-800 text-primary shadow' : 'text-slate-400'}`}>Categories</button>
-                <button onClick={() => setStatView('stores')} className={`flex-1 text-[10px] font-bold py-2 rounded-md ${statView === 'stores' ? 'bg-white dark:bg-slate-800 text-primary shadow' : 'text-slate-400'}`}>Stores</button>
-              </div>
+        )}
 
-              <div className={`rounded-xl border p-6 shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-card'}`}>
-                <h3 className="font-black text-xs uppercase tracking-widest mb-6 opacity-80 flex items-center gap-2">
-                  {statView === 'items' ? <ListOrdered className="w-4 h-4 text-primary" /> : statView === 'categories' ? <PieChart className="w-4 h-4 text-primary" /> : <Store className="w-4 h-4 text-primary" />}
-                  {statView.toUpperCase()} ANALYSIS
-                </h3>
-                <div className="space-y-5">
-                  {(statView === 'items' ? displayedItems : statView === 'categories' ? categoryData : storeData).map((data, i) => {
-                    const max = (statView === 'items' ? allItemsData : statView === 'categories' ? categoryData : storeData)[0].count;
-                    const percentage = Math.max(2, Math.round((data.count / max) * 100));
-                    const isExpanded = expandedStat === data.name;
-                    return (
-                      <div key={data.name} className="space-y-1.5 group cursor-pointer" onClick={() => setExpandedStat(isExpanded ? null : data.name)}>
-                        <div className="flex justify-between text-[11px] font-bold">
-                          <span className="flex items-center gap-1.5 opacity-80 truncate group-hover:opacity-100 transition-opacity">
-                            {statView !== 'items' && <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180 text-primary' : 'opacity-40'}`} />}
-                            {statView === 'stores' && data.name !== "Unassigned" && <StoreLogo storeName={data.name} className="w-3 h-3" />}
-                            {statView === 'items' && <span className="opacity-50 font-normal mr-1">{i + 1}.</span>}
-                            {data.name}
-                          </span>
-                          <span className="opacity-60">{data.count}</span>
-                        </div>
-                        <div className={`h-2.5 w-full rounded-full ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-hidden`}>
-                          <div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${percentage}%` }} />
-                        </div>
-                        {isExpanded && statView !== 'items' && (
-                          <div className="pt-2 flex flex-wrap gap-1.5 animate-in fade-in slide-in-from-top-1">
-                            {(data as any).items.map((it: string) => (
-                              <span key={it} className={`text-[9px] px-2 py-1 rounded-md border font-semibold ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-600'}`}>{it}</span>
-                            ))}
-                          </div>
-                        )}
+        <AddItemForm onAddItem={handleAddItem} categories={GROCERY_CATEGORIES} stores={PRESET_STORES} />
+
+        <Tabs defaultValue="active" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 bg-white dark:bg-slate-900 p-1 rounded-2xl border shadow-sm">
+            <TabsTrigger value="active" className="rounded-xl flex gap-2"><ListOrdered className="w-4 h-4" /> List ({activeItems.length})</TabsTrigger>
+            <TabsTrigger value="cart" className="rounded-xl flex gap-2"><ShoppingCart className="w-4 h-4" /> Cart ({cartItems.length})</TabsTrigger>
+            <TabsTrigger value="history" className="rounded-xl flex gap-2"><History className="w-4 h-4" /> Habits</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="active" className="mt-6 space-y-6">
+            {Object.keys(grouped).sort((a,b) => GROCERY_CATEGORIES.indexOf(a) - GROCERY_CATEGORIES.indexOf(b)).map(cat => (
+              <div key={cat} className="space-y-3">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">{cat}</h3>
+                {grouped[cat].map(item => (
+                  <div key={item.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm group">
+                    <div className="flex items-center gap-4">
+                      <button onClick={() => handleCheckout(item.id)} className="w-6 h-6 rounded-full border-2 border-blue-100 hover:border-blue-500 transition-colors" />
+                      <div>
+                        <p className="text-sm font-bold">{item.name}</p>
+                        <p className="text-[9px] font-black uppercase opacity-40">{item.store || "Any Store"}</p>
                       </div>
-                    )
-                  })}
-                </div>
+                    </div>
+                    <button onClick={() => handleDelete(item.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                ))}
               </div>
-            </div>
-          )}
-        </div>
+            ))}
+          </TabsContent>
+
+          <TabsContent value="cart" className="mt-6 space-y-3">
+            {cartItems.length > 0 && (
+              <button onClick={handleCompleteTrip} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-95 transition-all mb-4">
+                Complete Trip & Sync Cloud
+              </button>
+            )}
+            {cartItems.map(item => (
+              <div key={item.id} className="p-4 bg-white/50 dark:bg-slate-900/50 border border-dashed rounded-2xl opacity-60 flex justify-between items-center">
+                <span className="text-sm font-medium line-through">{item.name}</span>
+                <CheckCheck className="w-4 h-4 text-green-500" />
+              </div>
+            ))}
+          </TabsContent>
+
+          <TabsContent value="history" className="mt-6 space-y-3">
+            {historyItems.map(item => (
+              <div key={item.id} className="p-4 bg-white dark:bg-slate-900 border rounded-2xl flex justify-between items-center group">
+                <div>
+                  <p className="text-sm font-bold">{item.name}</p>
+                  <p className="text-[9px] font-black opacity-30 uppercase tracking-tighter">
+                    {item.purchase_count} times • {getTimeAgo(item.purchase_dates?.[item.purchase_dates.length - 1])}
+                  </p>
+                </div>
+                <button onClick={() => handleAddItem(item.name)} className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-full text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <RefreshCcw className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
