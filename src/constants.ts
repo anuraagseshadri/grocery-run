@@ -109,6 +109,14 @@ export const getItemIcon = (name: string) => {
   if (n.includes('strawberr')) return 'fluent-emoji-flat:strawberry';
   if (n.includes('blueberr') || n.includes('berr')) return 'fluent-emoji-flat:blueberries';
   if (n.includes('cherr')) return 'fluent-emoji-flat:cherries';
+  if(n.includes('fruits')) return 'game-icons:fruit-bowl';
+ 
+  // ==========================================
+  // PANTRY & SNACKS
+  // ==========================================
+ 
+  if (n.includes('breakfast') || n.includes('breakfast items')) return 'fluent-emoji-flat:shallow-pan-of-food';
+  
 
   // ==========================================
   // BAKERY & GRAINS
@@ -119,6 +127,10 @@ export const getItemIcon = (name: string) => {
   if (n.includes('croissant')) return 'fluent-emoji-flat:croissant';
   if (n.includes('cereal') || n.includes('granola') || n.includes('oat')) return 'fluent-emoji-flat:bowl-with-spoon';
   if (n.includes('rice')) return 'fluent-emoji-flat:cooked-rice';
+  if (n.includes('pasta')) return 'fluent-emoji-flat:spaghetti';
+  if (n.includes('flour') || n.includes('aata')) return 'game-icons:flour';
+  if (n.includes('cake')) return 'fluent-emoji-flat:shortcake';
+  if (n.includes('cookies') || n.includes('cookie')) return 'fluent-emoji-flat:cookie';
 
   // ==========================================
   // DAIRY & EGGS
