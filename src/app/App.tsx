@@ -4,6 +4,7 @@ import {
   EyeOff, Trash2, Plus, ChevronUp, ChevronDown, PieChart, ListOrdered, Sparkles, RotateCcw, Moon, Sun, MapPin, Store, History
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
+import { Analytics } from '@vercel/analytics/react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { AddItemForm } from './components/AddItemForm';
 import { GroceryItem } from './types';
@@ -494,6 +495,7 @@ export default function App() {
           )}
         </div>
       </div>
+      <Analytics />
     </div>
   );
 }
