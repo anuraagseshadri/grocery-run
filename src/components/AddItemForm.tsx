@@ -4,19 +4,17 @@ import { Plus } from 'lucide-react';
 interface AddItemFormProps {
   onAddItem: (name: string, category?: string, store?: string) => void;
   categories: string[];
-  stores: string[];
+  stores: string[]; // Restores the missing stores prop
 }
 
 export function AddItemForm({ onAddItem, categories, stores }: AddItemFormProps) {
   const [name, setName] = useState('');
-  // Default to the first store in the preset array (e.g., 'Costco')
   const [selectedStore, setSelectedStore] = useState(stores[0] || 'Unassigned');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     
-    // Pass the name, leave category undefined (auto-categorize), and pass the selected store
     onAddItem(name, undefined, selectedStore);
     setName('');
   };
