@@ -72,8 +72,5 @@ export function Auth() {
       </div>
     </div>
   );
-<<<<<<< HEAD
+
 }
-=======
-}
->>>>>>> 9166f50 (Refactor: Added Supabase cloud sync and Auth)
