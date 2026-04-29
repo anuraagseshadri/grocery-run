@@ -1,57 +1,50 @@
-import { useState } from "react";
-import { Plus } from "lucide-react";
+import React, { useState } from 'react';
+import { Plus } from 'lucide-react';
 
 interface AddItemFormProps {
-  onAddItem: (name: string, category: string) => void;
-  categories?: string[];
+  onAddItem: (name: string, category?: string, store?: string) => void;
+  categories: string[];
+  stores: string[];
 }
 
-export function AddItemForm({ onAddItem, categories = [] }: AddItemFormProps) {
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
+export function AddItemForm({ onAddItem, categories, stores }: AddItemFormProps) {
+  const [name, setName] = useState('');
+  // Default to the first store in the preset array (e.g., 'Costco')
+  const [selectedStore, setSelectedStore] = useState(stores[0] || 'Unassigned');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim()) {
-      onAddItem(name.trim(), category);
-      setName("");
-      setCategory("");
-    }
+    if (!name.trim()) return;
+    
+    // Pass the name, leave category undefined (auto-categorize), and pass the selected store
+    onAddItem(name, undefined, selectedStore);
+    setName('');
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+    <form onSubmit={handleSubmit} className="flex gap-2 w-full">
       <input
         type="text"
-        placeholder="Item name (e.g. Milk)"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        // --- UPDATED: Added text visibility and focus classes ---
-        className="flex-1 p-3 rounded-md border bg-background text-slate-900 placeholder-slate-400 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50"
+        placeholder="Add item..."
+        className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm"
       />
-      
-      {categories.length > 0 && (
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          // --- UPDATED: Added text visibility and focus classes ---
-          className="p-3 rounded-md border bg-background w-full sm:w-[180px] text-slate-900 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/50"
-        >
-          <option value="">Category...</option>
-          {categories.map((cat) => (
-            <option key={cat} value={cat}>
-              {cat}
-            </option>
-          ))}
-        </select>
-      )}
-
-      <button
-        type="submit"
-        className="bg-primary text-primary-foreground p-3 rounded-md hover:bg-primary/90 flex items-center justify-center gap-2 transition-colors"
+      <select
+        value={selectedStore}
+        onChange={(e) => setSelectedStore(e.target.value)}
+        className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-sm"
+      >
+        {stores.map(store => (
+          <option key={store} value={store}>{store}</option>
+        ))}
+      </select>
+      <button 
+        type="submit" 
+        disabled={!name.trim()}
+        className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white p-3 rounded-xl shadow-sm transition-colors flex items-center justify-center"
       >
         <Plus className="w-5 h-5" />
-        <span className="sm:hidden">Add</span>
       </button>
     </form>
   );

@@ -6,7 +6,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Package, CheckCheck, RefreshCcw, BarChart3, 
   Trash2, Plus, Sparkles, Moon, Sun, LogOut, Loader2,
-  ListOrdered, History, ShoppingCart
+  ListOrdered, History, ShoppingCart, X
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -81,12 +81,22 @@ export default function App() {
   // 3. Predictive Suggestion Engine
   const suggestions = useMemo(() => {
     const today = new Date().getTime();
+    
     return items.filter(item => {
       if (!item.is_history || (item.purchase_dates || []).length < 2) return false;
+
+      if (item.dismissed_at) {
+        const dismissTime = new Date(item.dismissed_at).getTime();
+        const daysSinceDismiss = (today - dismissTime) / (1000 * 60 * 60 * 24);
+        if (daysSinceDismiss < 7) return false; 
+      }
+
       const dates = item.purchase_dates!.map(d => new Date(d).getTime()).sort((a, b) => a - b);
-      const avgInterval = ((dates[dates.length - 1] - dates[0]) / (dates.length - 1)) / 86400000;
-      return ((today - dates[dates.length - 1]) / 86400000) >= avgInterval;
-    }).slice(0, 5);
+      const avgIntervalDays = ((dates[dates.length - 1] - dates[0]) / (dates.length - 1)) / (1000 * 60 * 60 * 24);
+      const daysSinceLastPurchase = (today - dates[dates.length - 1]) / (1000 * 60 * 60 * 24);
+      
+      return daysSinceLastPurchase >= avgIntervalDays;
+    }).slice(0, 5); 
   }, [items]);
 
   // --- ACTIONS & HANDLERS ---
@@ -137,14 +147,14 @@ export default function App() {
     if (data) setItems(prev => [data[0], ...prev]);
   };
 
-  const handleAddWithSparkle = async (name: string, id: string) => {
-    setAnimatingId(id);
+  const handleAddWithSparkle = async (name: string, id: string | number) => {
+    setAnimatingId(id.toString());
     const cleanName = name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim();
     await handleAddItem(cleanName);
     setTimeout(() => setAnimatingId(null), 800);
   };
 
-  const handleCheckout = async (id: string) => {
+  const handleCheckout = async (id: string | number) => {
     const item = items.find(i => i.id === id);
     if (!item) return;
 
@@ -156,12 +166,31 @@ export default function App() {
 
     if (!error) setItems(prev => prev.map(i => i.id === id ? { ...i, checked_out: true } : i));
   };
-
-  const handleDelete = async (id: string) => {
+  
+  const handleDelete = async (id: string | number) => {
     const { error } = await supabase.from('grocery_items').delete().eq('id', id);
     if (!error) setItems(prev => prev.filter(i => i.id !== id));
   };
 
+  const handleDismiss = async (id: string | number, e: React.MouseEvent) => {
+    e.stopPropagation(); 
+    
+    const now = new Date().toISOString();
+    
+    setItems(prev => prev.map(i => i.id === id ? { ...i, dismissed_at: now } : i));
+
+    const { error } = await supabase
+      .from('grocery_items')
+      .update({ dismissed_at: now })
+      .eq('id', id);
+
+    if (error) {
+      toast.error("Failed to dismiss item.");
+    } else {
+      toast.success("Snoozed for 7 days.");
+    }
+  };
+  
   const handleCompleteTrip = async () => {
     const checkedItems = items.filter(i => i.checked_out && !i.is_history);
     if (checkedItems.length === 0) return;
@@ -180,10 +209,11 @@ export default function App() {
   const cartItems = items.filter(i => i.checked_out && !i.is_history);
   const historyItems = items.filter(i => i.is_history);
   
-  const grouped = activeItems.reduce((acc, i) => {
-    const cat = i.category || "📦 Other";
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(i);
+  // Reshape the flat array into an object grouped by store
+  const groupedByStore = activeItems.reduce((acc, i) => {
+    const storeName = i.store || "Unassigned";
+    if (!acc[storeName]) acc[storeName] = [];
+    acc[storeName].push(i);
     return acc;
   }, {} as Record<string, GroceryItem[]>);
 
@@ -221,16 +251,33 @@ export default function App() {
         {/* SUGGESTIONS BAR */}
         {suggestions.length > 0 && (
           <div className="p-4 rounded-2xl border-2 border-dashed border-blue-200 dark:border-blue-900/30 bg-blue-50/50 dark:bg-blue-900/10">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-3 flex items-center gap-2"><Sparkles className="w-3 h-3" /> Habits Suggest:</h3>
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-3 flex items-center gap-2">
+              <Sparkles className="w-3 h-3" /> Habits Suggest:
+            </h3>
             <div className="flex flex-wrap gap-2">
               {suggestions.map(item => (
-                <button 
+                <div 
                   key={item.id} 
-                  onClick={() => handleAddWithSparkle(item.name, item.id)} 
-                  className={`px-3 py-1.5 border rounded-full text-xs font-bold transition-all relative ${animatingId === item.id ? 'scale-110 bg-blue-500 text-white border-blue-500' : 'bg-white dark:bg-slate-900 hover:border-blue-300'}`}
+                  className={`flex items-stretch border rounded-full text-xs font-bold transition-all relative shadow-sm overflow-hidden ${animatingId === item.id.toString() ? 'scale-110 border-blue-500 ring-2 ring-blue-200' : 'bg-white dark:bg-slate-900 hover:border-blue-300'}`}
                 >
-                  {item.name} {animatingId === item.id ? <Sparkles className="inline w-3 h-3 ml-1" /> : <Plus className="inline w-3 h-3 ml-1 text-blue-500" />}
-                </button>
+                  <button 
+                    onClick={() => handleAddWithSparkle(item.name, item.id)} 
+                    className={`px-3 py-1.5 flex items-center hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors ${animatingId === item.id.toString() ? 'bg-blue-500 text-white' : 'text-slate-700 dark:text-slate-200'}`}
+                  >
+                    {item.name} 
+                    {animatingId === item.id.toString() ? <Sparkles className="inline w-3 h-3 ml-1 animate-pulse" /> : <Plus className="inline w-3 h-3 ml-1 text-blue-500" />}
+                  </button>
+                  
+                  <div className={`w-px ${animatingId === item.id.toString() ? 'bg-blue-400' : 'bg-slate-200 dark:bg-slate-700'}`} />
+                  
+                  <button 
+                    onClick={(e) => handleDismiss(item.id, e)}
+                    className={`px-2 flex items-center justify-center transition-colors ${animatingId === item.id.toString() ? 'bg-blue-500 text-blue-200' : 'text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'}`}
+                    aria-label={`Dismiss ${item.name}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -246,16 +293,19 @@ export default function App() {
           </TabsList>
 
           <TabsContent value="active" className="mt-6 space-y-6">
-            {Object.keys(grouped).sort((a,b) => GROCERY_CATEGORIES.indexOf(a) - GROCERY_CATEGORIES.indexOf(b)).map(cat => (
-              <div key={cat} className="space-y-3">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">{cat}</h3>
-                {grouped[cat].map(item => (
+            {Object.keys(groupedByStore).sort().map(storeName => (
+              <div key={storeName} className="space-y-3">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">
+                  {storeName} ({groupedByStore[storeName].length})
+                </h3>
+                {groupedByStore[storeName].map(item => (
                   <div key={item.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm group">
                     <div className="flex items-center gap-4">
                       <button onClick={() => handleCheckout(item.id)} className="w-6 h-6 rounded-full border-2 border-blue-100 hover:border-blue-500 transition-colors" />
                       <div>
                         <p className="text-sm font-bold">{item.name}</p>
-                        <p className="text-[9px] font-black uppercase opacity-40">{item.store || "Any Store"}</p>
+                        {/* Display category badge here instead of store name */}
+                        <p className="text-[9px] font-black uppercase opacity-40">{item.category}</p>
                       </div>
                     </div>
                     <button onClick={() => handleDelete(item.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
@@ -263,6 +313,11 @@ export default function App() {
                 ))}
               </div>
             ))}
+            {Object.keys(groupedByStore).length === 0 && (
+              <div className="text-center text-slate-500 py-10 text-sm">
+                Your list is empty. Time to plan the next run.
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="cart" className="mt-6 space-y-3">
