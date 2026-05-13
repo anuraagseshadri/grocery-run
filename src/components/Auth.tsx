@@ -1,76 +1,73 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { toast } from 'sonner';
-import { Mail, Lock, Loader2, Sparkles } from 'lucide-react';
 
 export function Auth() {
   const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
 
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Auto-check if a silent session already exists
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+         // App is ready for guest login
+      }
+    };
+    checkSession();
+  }, []);
+
+  const handleGuestLogin = async () => {
     setLoading(true);
     
-    const { error } = isSignUp 
-      ? await supabase.auth.signUp({ email, password })
-      : await supabase.auth.signInWithPassword({ email, password });
-
+    // Supabase Anonymous Auth - Generates a silent UUID tied to the device
+    const { error } = await supabase.auth.signInAnonymously();
+    
     if (error) {
-      toast.error(error.message);
-    } else if (isSignUp) {
-      toast.success("Check your email for the confirmation link!");
+      toast.error("Failed to initialize your local workspace.");
+      setLoading(false);
     }
-    setLoading(false);
+    // Note: If successful, your existing onAuthStateChange listener in App.tsx 
+    // will automatically detect the new silent user and load the main app.
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-      <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
-        <div className="text-center mb-8">
-          <div className="inline-flex p-3 bg-blue-50 rounded-2xl mb-4">
-            <Sparkles className="w-8 h-8 text-blue-600" />
-          </div>
-          <h2 className="text-2xl font-black italic tracking-tighter text-slate-900">GROCERY RUN</h2>
-          <p className="text-sm text-slate-500 mt-1">{isSignUp ? 'Create your household account' : 'Welcome back to the list'}</p>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#f2f9ea] p-6 relative overflow-hidden antialiased">
+      {/* Decorative Organic Blur */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-[#9df197]/20 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 w-72 h-72 bg-[#70b5ff]/10 rounded-full blur-3xl -ml-20 -mb-20 pointer-events-none"></div>
+
+      <div className="z-10 flex flex-col items-center text-center space-y-6 max-w-sm w-full">
+        {/* Brand Icon */}
+        <div className="bg-[#ebf3e3] p-4 rounded-full shadow-sm mb-2">
+          <span className="material-symbols-outlined text-5xl text-[#176a21]">eco</span>
         </div>
 
-        <form onSubmit={handleAuth} className="space-y-4">
-          <div className="relative">
-            <Mail className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
-            <input 
-              type="email" placeholder="Email" value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              required 
-            />
-          </div>
-          <div className="relative">
-            <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
-            <input 
-              type="password" placeholder="Password" value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              required 
-            />
-          </div>
-          <button 
-            disabled={loading}
-            className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
-          >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isSignUp ? 'Sign Up' : 'Sign In')}
-          </button>
-        </form>
+        {/* Typography from the new Design System */}
+        <div className="space-y-2">
+          <h1 className="font-['Plus_Jakarta_Sans'] font-extrabold text-4xl text-[#176a21] tracking-tight">
+            Grocery Run
+          </h1>
+          <p className="font-['Be_Vietnam_Pro'] text-[#575e52] text-lg">
+            Tap, Shop, Done.
+          </p>
+        </div>
 
-        <button 
-          onClick={() => setIsSignUp(!isSignUp)}
-          className="w-full mt-6 text-sm font-medium text-slate-500 hover:text-blue-600 transition-colors"
+        {/* Frictionless Action Button */}
+        <button
+          onClick={handleGuestLogin}
+          disabled={loading}
+          className="mt-8 w-full bg-gradient-to-r from-[#176a21] to-[#025d16] text-white font-['Plus_Jakarta_Sans'] font-bold text-lg py-4 rounded-xl shadow-[0_24px_48px_-12px_rgba(42,49,39,0.15)] hover:scale-95 active:scale-95 transition-transform duration-200 flex justify-center items-center gap-2"
         >
-          {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+          {loading ? (
+            <span className="font-['Be_Vietnam_Pro']">Preparing Workspace...</span>
+          ) : (
+            <>
+              Start Shopping
+              <span className="material-symbols-outlined text-xl">arrow_forward</span>
+            </>
+          )}
         </button>
       </div>
     </div>
   );
-
 }

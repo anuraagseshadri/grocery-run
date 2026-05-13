@@ -1,321 +1,541 @@
-import { AddItemForm } from '../components/AddItemForm';
-import { Auth } from '../components/Auth';
-import { BackupRestore } from '../components/BackupRestore';
-import { supabase } from '../utils/supabaseClient';
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { Layout } from '../components/Layout';
+import { AddForm } from '../components/AddForm';
+import { ItemCard } from '../components/ItemCard';
+import { EditModal } from '../components/EditModal';
+import { Toast } from '../components/Toast';
+import { autoTagItem } from '../tagger';
+import { STORE_OPTIONS, getItemIcon } from '../constants';
+import { Logo } from '../components/Logo';
+// 1. ADD THIS LINE near your other imports:
+import { Icon } from '@iconify/react';
+
+import { db } from '../firebase';
 import { 
-  Package, CheckCheck, RefreshCcw, BarChart3, 
-  Trash2, Plus, Sparkles, Moon, Sun, LogOut, Loader2,
-  ListOrdered, History, ShoppingCart
-} from 'lucide-react';
-import { toast, Toaster } from 'sonner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
-import { GroceryItem } from './types';
+  collection, onSnapshot, addDoc, doc, updateDoc, 
+  deleteDoc, getDoc, setDoc 
+} from 'firebase/firestore';
 
-// --- HELPERS (Categories & Emojis) ---
-const EMOJI_MAP: Record<string, string> = {
-  onion: "🧅", tomato: "🍅", milk: "🥛", bread: "🍞", chicken: "🍗", eggs: "🥚", apple: "🍎", banana: "🍌", 
-  diaper: "🧷", formula: "🍼", wipe: "🧻", coffee: "☕", water: "💧", beer: "🍺"
+const GroceryRunLogo = ({ className = "w-9 h-9" }: { className?: string }) => (
+  <svg viewBox="0 0 256 256" className={className} xmlns="http://www.w3.org/2000/svg">
+    <g transform="rotate(15 128 128)">
+      <rect x="135" y="35" width="42" height="95" rx="8" fill="#8b5e3c" />
+      <circle cx="85" cy="85" r="28" fill="#ef4444" />
+      <path d="M 85 58 C 95 58, 102 45, 102 45 C 90 45, 85 58, 85 58 Z" fill="#176a21" />
+      <path d="M 105 40 Q 135 40, 135 85" fill="none" stroke="#facc15" strokeWidth="18" strokeLinecap="round" />
+      <path d="M 64 200 L 192 200 L 204 96 L 160 80 L 128 96 L 96 80 L 52 96 Z" fill="#D2A679" />
+    </g>
+  </svg>
+);
+
+interface GroceryItem {
+  id: string;
+  name: string;
+  category: string;
+  icon: string;
+  store: string;
+  inCart: boolean;
+  createdAt?: string;
+}
+
+// Place this at the top of App.tsx, outside the App function
+
+const isDuplicateItem = (newItem: string, existingItem: string) => {
+  const a = newItem.trim().toLowerCase();
+  const b = existingItem.trim().toLowerCase();
+  if (a === b) return true; 
+  if (a + 's' === b || b + 's' === a) return true; 
+  if (a + 'es' === b || b + 'es' === a) return true; 
+  if (a.replace(/y$/, 'ies') === b || b.replace(/y$/, 'ies') === a) return true; 
+  return false;
 };
 
-const getAutoCategory = (name: string): string => {
-  const lower = name.toLowerCase();
-  const categoryKeywords: Record<string, string[]> = {
-    "🥬 Produce": ["onion", "tomato", "potato", "apple", "banana", "spinach", "lettuce", "garlic", "fruit", "veg"],
-    "🥛 Dairy & Eggs": ["milk", "cheese", "egg", "butter", "yogurt", "cream", "paneer"],
-    "🥩 Meat & Seafood": ["chicken", "beef", "pork", "fish", "salmon", "bacon", "meat"],
-    "🍞 Bakery": ["bread", "bun", "bagel", "muffin", "cake", "pita", "tortilla"],
-    "👶 Baby": ["diaper", "wipe", "formula", "baby food", "pacifier", "soother"],
-    "🧼 Household": ["paper towel", "toilet paper", "soap", "detergent", "clean", "foil", "trash"],
-    "🥫 Pantry": ["rice", "dal", "flour", "sugar", "salt", "spice", "oil", "ghee", "cereal", "oat", "honey"]
-  };
-  for (const [category, keywords] of Object.entries(categoryKeywords)) {
-    if (keywords.some(keyword => lower.includes(keyword))) return category;
-  }
-  return "📦 Other";
-};
-
-const GROCERY_CATEGORIES = ["🥬 Produce", "🥛 Dairy & Eggs", "🥩 Meat & Seafood", "🍞 Bakery", "🍝 Pasta & Grains", "🥜 Nuts & Seeds", "🥫 Pantry", "❄️ Frozen Foods", "🍿 Snacks & Candy", "🥤 Beverages & Coffee", "🧼 Household & Cleaning", "🧴 Personal & Pet Care", "💊 Health & Pharmacy", "👶 Baby", "📦 Other"];
-const PRESET_STORES = ["Costco", "FreshCo", "No Frills", "Walmart", "SDM", "Other"];
-
-const normalizeName = (name: string) => name.toLowerCase().replace(/[^\w\s]/gi, "").trim();
-
-const getTimeAgo = (dateString: string | undefined) => {
-  if (!dateString) return "First purchase";
-  const diffDays = Math.floor((new Date().getTime() - new Date(dateString).getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  return `${diffDays}d ago`;
-};
-
-// --- MAIN APPLICATION ---
 export default function App() {
-  const [session, setSession] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState('list');
   const [items, setItems] = useState<GroceryItem[]>([]);
-  const [darkMode, setDarkMode] = useState(false);
-  const [animatingId, setAnimatingId] = useState<string | null>(null);
-  const [isMigrating, setIsMigrating] = useState(false);
+  const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
+  const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // 1. Auth & Session Watcher
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
-    return () => subscription.unsubscribe();
-  }, []);
+ useEffect(() => {
+  const unsubscribeItems = onSnapshot(collection(db, 'items'), (snapshot) => {
+    const liveItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroceryItem));
+    setItems(liveItems);
+  });
 
-  // 2. Fetch Data from Cloud
-  useEffect(() => {
-    const fetchItems = async () => {
-      if (!session?.user) return;
-      const { data, error } = await supabase
-        .from('grocery_items')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false });
-      if (data) setItems(data);
-      if (error) toast.error("Cloud fetch failed");
-    };
-    fetchItems();
-  }, [session]);
+  const unsubscribeHistory = onSnapshot(collection(db, 'purchaseHistory'), (snapshot) => {
+    const liveHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    setPurchaseHistory(liveHistory);
+  });
 
-  // 3. Predictive Suggestion Engine
-  const suggestions = useMemo(() => {
-    const today = new Date().getTime();
-    return items.filter(item => {
-      if (!item.is_history || (item.purchase_dates || []).length < 2) return false;
-      const dates = item.purchase_dates!.map(d => new Date(d).getTime()).sort((a, b) => a - b);
-      const avgInterval = ((dates[dates.length - 1] - dates[0]) / (dates.length - 1)) / 86400000;
-      return ((today - dates[dates.length - 1]) / 86400000) >= avgInterval;
-    }).slice(0, 5);
-  }, [items]);
+  return () => {
+    unsubscribeItems();
+    unsubscribeHistory();
+  };
+}, []);
 
-  // --- ACTIONS & HANDLERS ---
+  // UPDATED: Fetches learned category from CLOUD (Firestore) instead of local cache
+  const handleAddItem = async (newItemName: string) => {
+    const nameKey = newItemName.toLowerCase().trim();
+    const existingMatch = items.find(item => isDuplicateItem(newItemName, item.name));
 
-  const migrateLocalToCloud = async () => {
-    const localData = localStorage.getItem('groceryItems');
-    if (!localData || !session?.user) return;
-    
-    setIsMigrating(true);
-    const localItems = JSON.parse(localData);
-    
-    const formatted = localItems.map((i: any) => ({
-      name: i.name,
-      category: i.category || "📦 Other",
-      store: i.store || "",
-      purchase_count: i.purchaseCount || i.purchase_count || 0,
-      purchase_dates: i.purchaseDates || i.purchase_dates || [],
-      is_history: i.isHistory || i.is_history || false,
-      checked_out: i.checkedOut || i.checked_out || false,
-      user_id: session.user.id
-    }));
-
-    const { error } = await supabase.from('grocery_items').insert(formatted);
-    if (!error) {
-      toast.success("Successfully migrated to Cloud!");
-      localStorage.removeItem('groceryItems');
-      window.location.reload(); 
-    } else {
-      toast.error("Migration failed");
+    if (existingMatch) {
+      setToastMessage(`${existingMatch.name} is already in your list`);
+      return; 
     }
-    setIsMigrating(false);
+
+    // PHASE 3: Cloud Learning Retrieval
+    const prefRef = doc(db, 'preferences', nameKey);
+    const prefSnap = await getDoc(prefRef);
+    const learnedCat = prefSnap.exists() ? prefSnap.data().category : null;
+
+    const { category: autoCat, icon, store } = autoTagItem(newItemName);
+
+    await addDoc(collection(db, 'items'), {
+      name: newItemName.trim(),
+      category: learnedCat || autoCat, // Preference takes priority
+      icon, 
+      store,
+      inCart: false, 
+      createdAt: new Date().toISOString()
+    });
   };
 
-  const handleAddItem = async (name: string, manualCategory?: string, manualStore?: string) => {
-    if (!name.trim() || !session?.user) return;
-    
-    const normName = normalizeName(name);
-    const finalEmoji = EMOJI_MAP[normName] || "";
-    const displayName = finalEmoji ? `${name} ${finalEmoji}` : name;
-
-    const { data, error } = await supabase.from('grocery_items').insert([{
-      name: displayName,
-      category: manualCategory || getAutoCategory(name),
-      store: manualStore || "",
-      user_id: session.user.id
-    }]).select();
-
-    if (data) setItems(prev => [data[0], ...prev]);
+  const handleToggleCart = async (id: string, currentState: boolean) => {
+    await updateDoc(doc(db, 'items', id), { inCart: !currentState });
+    setToastMessage(!currentState ? "Moved to Cart" : "Moved back to List");
   };
 
-  const handleAddWithSparkle = async (name: string, id: string | number) => {
-    setAnimatingId(id.toString());
-    const cleanName = name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim();
-    await handleAddItem(cleanName);
-    setTimeout(() => setAnimatingId(null), 800);
+  const handleDeleteItem = async (id: string) => {
+    await deleteDoc(doc(db, 'items', id));
   };
 
-  const handleCheckout = async (id: string | number) => {
-     // ... keep existing logic
-    const item = items.find(i => i.id === id);
-    if (!item) return;
-
-    const { error } = await supabase.from('grocery_items').update({ 
-      checked_out: true, 
-      purchase_count: (item.purchase_count || 0) + 1,
-      purchase_dates: [...(item.purchase_dates || []), new Date().toISOString()]
-    }).eq('id', id);
-
-    if (!error) setItems(prev => prev.map(i => i.id === id ? { ...i, checked_out: true } : i));
-  };
-
-  const handleDelete = async (id: string | number) => {
-    const { error } = await supabase.from('grocery_items').delete().eq('id', id);
-    if (!error) setItems(prev => prev.filter(i => i.id !== id));
-  };
-const handleDismiss = async (id: string | number, e: React.MouseEvent) => {
-    e.stopPropagation(); 
-    
-    const now = new Date().toISOString();
-    
-    // Optimistic UI update: Instantly hide it locally
-    setItems(prev => prev.map(i => i.id === id ? { ...i, dismissed_at: now } : i));
-
-    // Background network request
-    const { error } = await supabase
-      .from('grocery_items')
-      .update({ dismissed_at: now })
-      .eq('id', id);
-
-    if (error) {
-      toast.error("Failed to dismiss item.");
-    } else {
-      toast.success("Snoozed for 7 days.");
+  // UPDATED: Now records manual category changes into Cloud Preferences
+  const handleUpdateItem = async (id: string, updates: Partial<GroceryItem>) => {
+    if (updates.category && updates.name) {
+      const nameKey = updates.name.toLowerCase().trim();
+      
+      // PHASE 3: Cloud Learning Trigger
+      await setDoc(doc(db, 'preferences', nameKey), {
+        category: updates.category,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
     }
-  };
-  const handleCompleteTrip = async () => {
-    const checkedItems = items.filter(i => i.checked_out && !i.is_history);
-    if (checkedItems.length === 0) return;
 
-    const updates = checkedItems.map(i => ({ ...i, checked_out: false, is_history: true }));
-    const { error } = await supabase.from('grocery_items').upsert(updates);
-    
-    if (!error) {
-      setItems(prev => prev.map(i => i.checked_out ? { ...i, checked_out: false, is_history: true } : i));
-      toast.success("Trip completed! Items moved to History.");
+    await updateDoc(doc(db, 'items', id), updates);
+    setEditingItem(null); 
+  };
+
+  // NEW: surgically forgets a specific item-category link in the Cloud
+  const handleForgetPreference = async (name: string) => {
+    const nameKey = name.toLowerCase().trim();
+    await deleteDoc(doc(db, 'preferences', nameKey));
+    setToastMessage(`Reset default categorization for ${name}`);
+    setEditingItem(null);
+  };
+
+  const handleCompletePurchase = async () => {
+    const cartItems = items.filter(item => item.inCart);
+    await addDoc(collection(db, 'purchaseHistory'), {
+      date: new Date().toISOString(),
+      items: cartItems
+    });
+    for (const item of cartItems) {
+      await deleteDoc(doc(db, 'items', item.id));
     }
+    setActiveTab('habits');
   };
 
-  // --- UI GROUPING ---
-  const activeItems = items.filter(i => !i.is_history && !i.checked_out);
-  const cartItems = items.filter(i => i.checked_out && !i.is_history);
-  const historyItems = items.filter(i => i.is_history);
+  const handleAddFromHabits = async (habit: any) => {
+    await addDoc(collection(db, 'items'), {
+      name: habit.name, category: habit.category, icon: habit.icon, store: habit.store,
+      inCart: false, createdAt: new Date().toISOString()
+    });
+    setToastMessage(`Added ${habit.name} to List`);
+    setActiveTab('list'); 
+  };
   
-  const grouped = activeItems.reduce((acc, i) => {
-    const cat = i.category || "📦 Other";
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(i);
-    return acc;
+  // 2. THE LIST DEFINITIONS
+  const listTabItems = items; 
+  const cartTabItems = items.filter(item => item.inCart);
+
+  // 3. THE STORE GROUPING MATH
+  const groupedByStore = listTabItems.reduce((groups, item) => {
+    const rawStore = item.store?.trim() || 'Other';
+    const officialStore = STORE_OPTIONS.find(
+      s => s.name.toLowerCase() === rawStore.toLowerCase()
+    );
+    const storeName = officialStore ? officialStore.name : 'Other';
+
+    if (!groups[storeName]) { groups[storeName] = []; }
+    groups[storeName].push(item);
+    return groups;
   }, {} as Record<string, GroceryItem[]>);
 
-  if (!session) return <div className={darkMode ? 'dark' : ''}><Auth /></div>;
+  // ===================== DASHBOARD DATA ENGINE =====================
+  const habitsDashboardData = useMemo(() => {
+    const itemHistory: Record<string, { itemData: GroceryItem, dates: number[], count: number }> = {};
+
+    // 1. Extract exact timestamps and total purchase counts
+    purchaseHistory.forEach(order => {
+      if (!order.date || !order.items) return;
+      const orderTime = new Date(order.date).getTime();
+
+      order.items.forEach((item: GroceryItem) => {
+        const key = (item.name || '').toLowerCase();
+        if (!itemHistory[key]) {
+          itemHistory[key] = { itemData: item, dates: [], count: 0 };
+        }
+        itemHistory[key].dates.push(orderTime);
+        itemHistory[key].count += 1; // Track lifetime volume
+      });
+    });
+
+    const now = new Date().getTime();
+    const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+    // 2. Calculate Velocity Metrics
+    const dashboard = Object.values(itemHistory).map(record => {
+      let avgIntervalDays = null;
+      let daysSinceLast = null;
+      let status = 'Need Data';
+      let progressPercent = 0;
+
+      if (record.dates.length >= 2) {
+        const sortedDates = record.dates.sort((a, b) => a - b);
+        let totalIntervalMs = 0;
+        
+        for (let i = 1; i < sortedDates.length; i++) {
+          totalIntervalMs += (sortedDates[i] - sortedDates[i - 1]);
+        }
+        
+        avgIntervalDays = (totalIntervalMs / (sortedDates.length - 1)) / MS_PER_DAY;
+        const lastPurchaseTime = sortedDates[sortedDates.length - 1];
+        daysSinceLast = (now - lastPurchaseTime) / MS_PER_DAY;
+
+        // Calculate how close you are to running out (capped at 100%)
+        progressPercent = Math.min((daysSinceLast / avgIntervalDays) * 100, 100);
+
+        // Determine priority status
+        if (daysSinceLast >= (avgIntervalDays * 0.9) && avgIntervalDays < 45) {
+          status = 'Restock Soon';
+        } else {
+          status = 'Stocked';
+        }
+      }
+
+      return {
+        ...record.itemData,
+        totalPurchases: record.count,
+        avgIntervalDays: avgIntervalDays ? Math.round(avgIntervalDays) : null,
+        daysSinceLast: daysSinceLast ? Math.round(daysSinceLast) : null,
+        status,
+        progressPercent
+      };
+    });
+
+    // 3. Sort: "Restock Soon" items at the top, then by progress percentage
+    return dashboard.sort((a, b) => {
+      if (a.status === 'Restock Soon' && b.status !== 'Restock Soon') return -1;
+      if (b.status === 'Restock Soon' && a.status !== 'Restock Soon') return 1;
+      return b.progressPercent - a.progressPercent;
+    });
+  }, [purchaseHistory]);
+
+
+// ===================== REPLENISHMENT ENGINE =====================
+  const suggestedReplenishments = useMemo(() => {
+    const itemHistory: Record<string, { itemData: GroceryItem, dates: number[] }> = {};
+    
+    // 1. Extract all exact purchase timestamps
+    purchaseHistory.forEach(order => {
+      if (!order.date || !order.items) return;
+      const orderTime = new Date(order.date).getTime(); 
+      
+      order.items.forEach((item: GroceryItem) => {
+        const key = (item.name || '').toLowerCase();
+        if (!itemHistory[key]) {
+          itemHistory[key] = { itemData: item, dates: [] };
+        }
+        itemHistory[key].dates.push(orderTime);
+      });
+    });
+
+    const now = new Date().getTime();
+    const suggestions: GroceryItem[] = [];
+    const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+    // 2. Calculate Velocity and Compare against Current Date
+    Object.values(itemHistory).forEach(record => {
+      if (record.dates.length < 2) return; // Need at least 2 purchases to find a pattern
+
+      const sortedDates = record.dates.sort((a, b) => a - b);
+      let totalIntervalMs = 0;
+      
+      for (let i = 1; i < sortedDates.length; i++) {
+        totalIntervalMs += (sortedDates[i] - sortedDates[i - 1]);
+      }
+      
+      const avgIntervalDays = (totalIntervalMs / (sortedDates.length - 1)) / MS_PER_DAY;
+      const lastPurchaseTime = sortedDates[sortedDates.length - 1];
+      const daysSinceLast = (now - lastPurchaseTime) / MS_PER_DAY;
+
+      // 3. Trigger: 90% of interval passed AND it is a regular staple (< 45 days)
+      if (daysSinceLast >= (avgIntervalDays * 0.9) && avgIntervalDays < 45) {
+        // Ensure it is not ALREADY on your active list before suggesting it
+        const alreadyOnList = items.some(i => i.name.toLowerCase() === record.itemData.name.toLowerCase());
+        if (!alreadyOnList) {
+          suggestions.push(record.itemData);
+        }
+      }
+    });
+
+    return suggestions;
+  }, [purchaseHistory, items]);
+
 
   return (
-    <div className={`min-h-screen p-4 sm:p-8 transition-colors duration-300 ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-      <Toaster position="top-center" richColors theme={darkMode ? 'dark' : 'light'} />
-      <div className="max-w-4xl mx-auto space-y-6">
+    
+    <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
+      <div className="w-full flex flex-col gap-6 pb-20">
         
-        {/* HEADER */}
-        <header className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-black italic tracking-tighter text-blue-600 truncate">GROCERY RUN</h1>
-            <p className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40">Cloud Sync Enabled</p>
-          </div>
-          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-1.5 rounded-full shadow-sm border border-slate-200 dark:border-slate-800">
-            <BackupRestore />
-            <button onClick={() => setDarkMode(!darkMode)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-              {darkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-500" />}
-            </button>
-            <button onClick={() => supabase.auth.signOut()} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full text-slate-400 hover:text-red-500">
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
-        </header>
+        {activeTab === 'list' && (
+          <>
+           <AddForm onAddItem={handleAddItem} />
+            
+            {/* REPLENISHMENT NOTIFICATION BANNER */}
+            {suggestedReplenishments.length > 0 && (
+              <div className="mb-6 p-4 bg-primary-container/40 border border-primary/30 rounded-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="material-symbols-outlined text-primary text-xl">notifications_active</span>
+                  <h3 className="font-headline font-bold text-primary">You might be running out of:</h3>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                  {suggestedReplenishments.map(item => (
+                    <button
+                      key={`suggest-${item.name}`}
+                      onClick={() => handleAddFromHabits(item)}
+                      className="whitespace-nowrap flex items-center gap-2 px-4 py-2 bg-surface rounded-full shadow-sm border border-outline-variant/30 hover:border-primary transition-colors text-sm font-medium text-on-surface"
+                    >
+                      <Icon icon={getItemIcon(item.name)} className="text-lg" />
+                      {item.name}
+                      <span className="material-symbols-outlined text-[16px] text-on-surface-variant ml-1">add_circle</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-        {/* MIGRATION BANNER */}
-        {localStorage.getItem('groceryItems') && (
-          <button onClick={migrateLocalToCloud} disabled={isMigrating} className="w-full py-3 bg-amber-50 dark:bg-amber-900/10 border border-dashed border-amber-300 rounded-2xl text-[10px] font-black uppercase tracking-widest text-amber-600 flex items-center justify-center gap-2 animate-pulse">
-            {isMigrating ? <Loader2 className="w-3 h-3 animate-spin" /> : "⚠️ Migrate Local List to Cloud"}
-          </button>
-        )}
+            {listTabItems.length === 0 ? (
+              <p className="text-on-surface-variant text-center mt-10">Your list is empty.</p>
+            ) : (
+              <div className="flex flex-col gap-8">
+                {Object.keys(groupedByStore).sort().map((storeName) => {
+                  const storeItems = groupedByStore[storeName];
+                  const brandProfile = STORE_OPTIONS.find(s => s.name === storeName) || STORE_OPTIONS.find(s => s.name === 'Other');
+                  return (
+                    <div key={storeName} className="flex flex-col gap-3">
+                     {/* Find this section in your App.tsx and replace it */}
 
-        {/* SUGGESTIONS BAR */}
-        {suggestions.length > 0 && (
-          <div className="p-4 rounded-2xl border-2 border-dashed border-blue-200 dark:border-blue-900/30 bg-blue-50/50 dark:bg-blue-900/10">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-3 flex items-center gap-2"><Sparkles className="w-3 h-3" /> Habits Suggest:</h3>
-            <div className="flex flex-wrap gap-2">
-              {suggestions.map(item => (
-                <button 
-                  key={item.id} 
-                  onClick={() => handleAddWithSparkle(item.name, item.id)} 
-                  className={`px-3 py-1.5 border rounded-full text-xs font-bold transition-all relative ${animatingId === item.id ? 'scale-110 bg-blue-500 text-white border-blue-500' : 'bg-white dark:bg-slate-900 hover:border-blue-300'}`}
-                >
-                  {item.name} {animatingId === item.id ? <Sparkles className="inline w-3 h-3 ml-1" /> : <Plus className="inline w-3 h-3 ml-1 text-blue-500" />}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+                  
+              
 
-        <AddItemForm onAddItem={handleAddItem} categories={GROCERY_CATEGORIES} stores={PRESET_STORES} />
-
-        <Tabs defaultValue="active" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-white dark:bg-slate-900 p-1 rounded-2xl border shadow-sm">
-            <TabsTrigger value="active" className="rounded-xl flex gap-2"><ListOrdered className="w-4 h-4" /> List ({activeItems.length})</TabsTrigger>
-            <TabsTrigger value="cart" className="rounded-xl flex gap-2"><ShoppingCart className="w-4 h-4" /> Cart ({cartItems.length})</TabsTrigger>
-            <TabsTrigger value="history" className="rounded-xl flex gap-2"><History className="w-4 h-4" /> Habits</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="active" className="mt-6 space-y-6">
-            {Object.keys(grouped).sort((a,b) => GROCERY_CATEGORIES.indexOf(a) - GROCERY_CATEGORIES.indexOf(b)).map(cat => (
-              <div key={cat} className="space-y-3">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">{cat}</h3>
-                {grouped[cat].map(item => (
-                  <div key={item.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm group">
-                    <div className="flex items-center gap-4">
-                      <button onClick={() => handleCheckout(item.id)} className="w-6 h-6 rounded-full border-2 border-blue-100 hover:border-blue-500 transition-colors" />
-                      <div>
-                        <p className="text-sm font-bold">{item.name}</p>
-                        <p className="text-[9px] font-black uppercase opacity-40">{item.store || "Any Store"}</p>
+<div className={`flex items-center gap-3 px-3 py-2 rounded-xl border shadow-sm ${brandProfile?.color || 'bg-gray-100 border-gray-200'}`}>
+  <span className="font-black italic tracking-tighter uppercase text-sm">
+    {brandProfile?.logo || storeName}
+  </span>
+  <span className="ml-auto text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-black/10 text-current">
+    {storeItems.length}
+  </span>
+</div>
+                      <div className="flex flex-col gap-2">
+                        {storeItems.map((item: GroceryItem) => (
+                          <ItemCard 
+                            key={item.id} id={item.id} name={item.name} 
+                            category={item.category || 'Unknown'} icon={item.icon || 'shopping_bag'}
+                            inCart={item.inCart} viewMode="list"
+                            onToggleCart={handleToggleCart} onDelete={handleDeleteItem}
+                            onEdit={() => setEditingItem(item)}
+                          />
+                        ))}
                       </div>
                     </div>
-                    <button onClick={() => handleDelete(item.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+       {/* ===================== CART TAB ===================== */}
+        {activeTab === 'cart' && (
+          <div className="flex flex-col gap-3 mt-2">
+            <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">Ready for Checkout</h2>
+            {cartTabItems.length === 0 ? (
+              <p className="text-on-surface-variant text-sm bg-surface-container p-4 rounded-xl">
+                Cart is empty. Tap the circles in your list to move items here.
+              </p>
+            ) : (
+              <>
+                {cartTabItems.map((item: GroceryItem) => (
+                  <ItemCard 
+                    key={item.id} id={item.id} name={item.name} 
+                    category={item.category || 'Unknown'} icon={item.icon || 'shopping_bag'}
+                    inCart={item.inCart} viewMode="cart"
+                    onToggleCart={handleToggleCart} onDelete={handleDeleteItem}
+                  />
+                ))}
+                <button 
+                  onClick={handleCompletePurchase}
+                  className="mt-6 w-full bg-primary text-on-primary font-headline font-semibold py-4 rounded-xl shadow-md hover:bg-primary/90 transition-all flex justify-center items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-xl">shopping_bag</span>
+                  Complete Purchase
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ===================== HABITS TAB ===================== */}
+       {/* ===================== REPLENISHMENT DASHBOARD UI ===================== */}
+        {activeTab === 'habits' && (
+          <div className="w-full flex flex-col gap-8 pb-24 animate-fade-in">
+            
+            {/* SECTION 1: RECOMMENDED RESTOCKS */}
+            <section>
+              <div className="mb-4 px-1">
+                <h2 className="text-xl font-headline font-bold text-on-surface mb-1 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary">auto_awesome</span>
+                  Recommended Restocks
+                </h2>
+                <p className="text-sm text-on-surface-variant">Items likely running out based on your velocity.</p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                {habitsDashboardData.filter(item => item.status === 'Restock Soon').map(item => (
+                  <div key={`due-${item.name}`} className="bg-surface-container-lowest p-4 rounded-2xl shadow-sm relative overflow-hidden group">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-surface-container rounded-full flex items-center justify-center text-2xl shadow-sm">
+                           <Icon icon={getItemIcon(item.name)} />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-on-surface text-lg">{item.name}</h3>
+                          <p className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5 font-medium uppercase tracking-wider">
+                            {item.category} • {item.totalPurchases} purchases
+                          </p>
+                        </div>
+                      </div>
+                      <span className="px-3 py-1 bg-error-container text-on-error text-[10px] font-bold rounded-full uppercase tracking-widest shadow-sm">
+                        Due
+                      </span>
+                    </div>
+
+                    <div className="mb-4">
+                      <div className="flex justify-between text-xs text-on-surface-variant mb-1.5 font-semibold">
+                        <span>Bought {item.daysSinceLast} days ago</span>
+                        <span>{item.avgIntervalDays} day cycle</span>
+                      </div>
+                      <div className="w-full bg-surface-container-high rounded-full h-2.5 overflow-hidden">
+                        <div 
+                          className="bg-error h-full rounded-full transition-all duration-1000 ease-out" 
+                          style={{ width: `${item.progressPercent}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={() => handleAddFromHabits(item)}
+                      className="w-full bg-surface-container text-primary font-semibold py-2.5 rounded-xl text-sm transition-colors hover:bg-surface-container-high flex items-center justify-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">add</span>
+                      Add to List
+                    </button>
                   </div>
                 ))}
+                
+                {habitsDashboardData.filter(item => item.status === 'Restock Soon').length === 0 && (
+                  <div className="bg-surface-container-lowest p-6 rounded-2xl text-center text-on-surface-variant">
+                    <span className="material-symbols-outlined text-4xl mb-2 text-primary/40">check_circle</span>
+                    <p className="font-medium">You are fully stocked on your routine items.</p>
+                  </div>
+                )}
               </div>
-            ))}
-          </TabsContent>
+            </section>
 
-          <TabsContent value="cart" className="mt-6 space-y-3">
-            {cartItems.length > 0 && (
-              <button onClick={handleCompleteTrip} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-95 transition-all mb-4">
-                Complete Trip & Sync Cloud
-              </button>
-            )}
-            {cartItems.map(item => (
-              <div key={item.id} className="p-4 bg-white/50 dark:bg-slate-900/50 border border-dashed rounded-2xl opacity-60 flex justify-between items-center">
-                <span className="text-sm font-medium line-through">{item.name}</span>
-                <CheckCheck className="w-4 h-4 text-green-500" />
+            {/* SECTION 2: HABITS BY CATEGORY */}
+            <section>
+              <div className="mb-4 px-1">
+                <h2 className="text-xl font-headline font-bold text-on-surface mb-1">My Grocery Habits</h2>
+                <p className="text-sm text-on-surface-variant">All tracked items.</p>
               </div>
-            ))}
-          </TabsContent>
 
-          <TabsContent value="history" className="mt-6 space-y-3">
-            {historyItems.map(item => (
-              <div key={item.id} className="p-4 bg-white dark:bg-slate-900 border rounded-2xl flex justify-between items-center group">
-                <div>
-                  <p className="text-sm font-bold">{item.name}</p>
-                  <p className="text-[9px] font-black opacity-30 uppercase tracking-tighter">
-                    {item.purchase_count} times • {getTimeAgo(item.purchase_dates?.[item.purchase_dates.length - 1])}
-                  </p>
-                </div>
-                <button onClick={() => handleAddItem(item.name)} className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-full text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <RefreshCcw className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </TabsContent>
-        </Tabs>
-      </div>
+              {/* Grouping Logic for Categories */}
+              {Array.from(new Set(habitsDashboardData.map(item => item.category))).map(category => (
+                <div key={`cat-${category}`} className="mb-6">
+                  <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-widest mb-3 pl-2">
+                    {category}
+                  </h3>
+                  <div className="flex flex-col gap-2">
+                    {habitsDashboardData.filter(item => item.category === category).map(item => (
+                      <div key={`all-${item.name}`} className="bg-surface-container-lowest p-3 rounded-xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                           <div className="w-10 h-10 bg-surface-container rounded-full flex items-center justify-center text-xl">
+                              <Icon icon={getItemIcon(item.name)} />
+                           </div>
+                           <div>
+                             <h4 className="font-bold text-on-surface text-sm">{item.name}</h4>
+                            {item.avgIntervalDays !== null ? (
+    <p className="text-[10px] text-on-surface-variant mt-0.5">
+      {item.daysSinceLast} / {item.avgIntervalDays} days
+    </p>
+  ) : (
+    <div className="flex items-center gap-1 mt-0.5 text-on-surface-variant/80">
+      <Icon icon="streamline-flex-color:critical-thinking-2-flat" className="text-[14px] animate-pulse opacity-90" />
+      <p className="text-[10px] italic">Purchase again to start tracking.</p>
     </div>
+  )}                           </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                           {item.status === 'Stocked' && (
+                             <div className="w-16 bg-surface-container-high rounded-full h-1.5 overflow-hidden">
+                               <div className="bg-primary h-full rounded-full" style={{ width: `${item.progressPercent}%` }}></div>
+                             </div>
+                           )}
+                           <button 
+                             onClick={() => handleAddFromHabits(item)}
+                             className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-primary hover:bg-surface-container-high transition-colors"
+                           >
+                             <span className="material-symbols-outlined text-[18px]">add</span>
+                           </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </section>
+            
+          </div>
+        )}
+      </div>
+
+      {editingItem && (
+        <EditModal 
+          item={editingItem} 
+          onClose={() => setEditingItem(null)} 
+          onSave={handleUpdateItem} 
+          onForget={handleForgetPreference}
+        />
+      )}
+
+      <Toast 
+        message={toastMessage || ''} 
+        isVisible={!!toastMessage} 
+        onClose={() => setToastMessage(null)} 
+      />
+    </Layout>
   );
 }
