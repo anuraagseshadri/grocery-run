@@ -101,9 +101,10 @@ export const getItemIcon = (name: string): string => {
   if (n.includes('cherr')) return 'fluent-emoji-flat:cherries';
   if (n.includes('aubergine') || n.includes('eggplant')) return 'fluent-emoji-flat:eggplant';
   if (n.includes('cucumber')) return 'fluent-emoji-flat:cucumber';
-  if (n.includes('parsley') || n.includes('herb')) return 'fluent-emoji-flat:herb';
+  if (n.includes('parsley') || n.includes('herb') || n.includes('coriander') || n.includes('cilantro')) return 'fluent-emoji-flat:herb';
   if (n.includes('kiwi')) return 'fluent-emoji-flat:kiwi-fruit';
   if (n.includes('clementine') || n.includes('tangerine') || n.includes('mandarin')) return 'fluent-emoji-flat:tangerine';
+  if (n.includes('coconut')) return 'fluent-emoji-flat:coconut';
  
   // ==========================================
   // BAKERY, GRAINS & PANTRY
@@ -116,6 +117,7 @@ export const getItemIcon = (name: string): string => {
   if (n.includes('pasta')) return 'fluent-emoji-flat:spaghetti';
   if (n.includes('noodle') || n.includes('ramen')) return 'fluent-emoji-flat:steaming-bowl';
   if (n.includes('cookies') || n.includes('cookie') || n.includes('biscuit')) return 'fluent-emoji-flat:cookie';
+  if (n.includes('soy sauce') || n.includes('soya sauce')) return 'fluent-emoji-flat:sake';
   
   // ==========================================
   // DAIRY & EGGS

@@ -5,10 +5,11 @@ import { ItemCard } from '../components/ItemCard';
 import { EditModal } from '../components/EditModal';
 import { Toast } from '../components/Toast';
 import { autoTagItem } from '../tagger';
-import { STORE_OPTIONS, getItemIcon } from '../constants';
+import { STORE_OPTIONS, getItemIcon, CATEGORIES } from '../constants';
 import { Logo } from '../components/Logo';
 import { Icon } from '@iconify/react';
 import { db } from '../firebase';
+
 import { 
   collection, onSnapshot, addDoc, doc, updateDoc, 
   deleteDoc, getDoc, setDoc 
@@ -39,10 +40,27 @@ interface GroceryItem {
 const isDuplicateItem = (newItem: string, existingItem: string) => {
   const a = newItem.trim().toLowerCase();
   const b = existingItem.trim().toLowerCase();
+  
+  // 1. Exact match check
   if (a === b) return true;
+  
+  // 2. Plural checks
   if (a + 's' === b || b + 's' === a) return true;
   if (a + 'es' === b || b + 'es' === a) return true;
   if (a.replace(/y$/, 'ies') === b || b.replace(/y$/, 'ies') === a) return true; 
+
+  // 3. Synonym Engine (Treats these pairs as the exact same item)
+  const synonyms = [
+    ['coriander', 'cilantro'],
+    ['eggplant', 'aubergine'],
+    ['zucchini', 'courgette'],
+    ['scallion', 'green onion']
+  ];
+
+  for (const group of synonyms) {
+    if (group.includes(a) && group.includes(b)) return true;
+  }
+
   return false;
 };
 
@@ -199,7 +217,6 @@ export default function App() {
       let effectiveInterval = DEFAULT_VELOCITY[itemNameKey] || null;
 
       if (record.dates.length >= 2) {
-        // FIXED: Array Spread operator prevents state mutation
         const sortedDates = [...record.dates].sort((a, b) => a - b);
         let totalIntervalMs = 0;
         
@@ -215,7 +232,6 @@ export default function App() {
         daysSinceLast = (now - lastPurchaseTime) / MS_PER_DAY;
         progressPercent = Math.min((daysSinceLast / effectiveInterval) * 100, 100);
 
-        // FIXED: Removed 45 day cap
         if (daysSinceLast >= (effectiveInterval * 0.9)) {
           status = 'Restock Soon';
         } else {
@@ -267,7 +283,6 @@ export default function App() {
       let effectiveInterval = DEFAULT_VELOCITY[itemNameKey] || null;
 
       if (record.dates.length >= 2) {
-        // FIXED: Array mutation
         const sortedDates = [...record.dates].sort((a, b) => a - b);
         let totalIntervalMs = 0;
         
@@ -282,7 +297,6 @@ export default function App() {
         const lastPurchaseTime = sortedDates[sortedDates.length - 1];
         const daysSinceLast = (now - lastPurchaseTime) / MS_PER_DAY;
 
-        // FIXED: Removed 45 day cap
         if (daysSinceLast >= (effectiveInterval * 0.9)) {
           const alreadyOnList = items.some(i => i.name.toLowerCase() === record.itemData.name.toLowerCase());
           if (!alreadyOnList) {
@@ -302,18 +316,17 @@ export default function App() {
         {activeTab === 'list' && (
           <>
             <AddForm onAddItem={handleAddItem} />
-            
-            {/* REPLENISHMENT NOTIFICATION BANNER - UPDATED TO GARDEN FRESH UI */}
+
+            {/* REPLENISHMENT NOTIFICATION BANNER */}
             {suggestedReplenishments.length > 0 && (
               <div className="mb-6 p-4 bg-white/50 backdrop-blur-md border border-primary/10 rounded-2xl shadow-[0_4px_20px_-4px_rgba(23,106,33,0.05)]">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="material-symbols-outlined text-primary text-xl">auto_awesome</span>
                   <h3 className="font-headline font-bold text-slate-800 tracking-tight">You might be running out of:</h3>
                 </div>
-                
                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                   {suggestedReplenishments.map(item => (
-                    <button
+                    <button 
                       key={`suggest-${item.name}`}
                       onClick={() => handleAddFromHabits(item)}
                       className="whitespace-nowrap flex items-center gap-1.5 px-4 py-2 bg-transparent rounded-full border border-primary/20 hover:border-primary/50 hover:bg-primary/5 transition-all text-sm font-bold text-slate-700"
@@ -328,52 +341,77 @@ export default function App() {
             )}
 
             {listTabItems.length === 0 ? (
-              <p className="text-on-surface-variant text-center mt-10">Your list is empty.</p>
+              <div className="flex flex-col items-center justify-center pt-16 pb-8 text-center px-4 animate-fade-in">
+                <div className="w-24 h-24 bg-surface-container-high rounded-full flex items-center justify-center mb-6">
+                  <span className="material-symbols-outlined text-5xl text-on-surface-variant/40">shopping_cart</span>
+                </div>
+                <h3 className="text-xl font-headline font-bold text-on-surface mb-2">Your list is empty</h3>
+                <p className="text-on-surface-variant max-w-[240px] leading-relaxed text-sm">
+                  Add some items above or check your habits tab for regular purchases.
+                </p>
+              </div>
             ) : (
-              <div className="flex flex-col gap-8">
+              <div className="flex flex-col gap-2">
                 {Object.keys(groupedByStore).sort().map((storeName) => {
-                  const storeItems = groupedByStore[storeName];
+                  const itemsInStore = groupedByStore[storeName];
                   const brandProfile = STORE_OPTIONS.find(s => s.name === storeName) || STORE_OPTIONS.find(s => s.name === 'Other');
                   
+                  // NEW: Create a strict rendering order based on your master CATEGORIES array
+                  const categoryOrder = CATEGORIES.reduce((acc, cat, index) => {
+                    acc[cat.name] = index;
+                    return acc;
+                  }, {} as Record<string, number>);
+
+                  // NEW: Sub-sort the items in this specific store so identical badges stack together
+                  const sortedItems = [...itemsInStore].sort((a, b) => {
+                    // If a category isn't found, push it to the bottom (99)
+                    const orderA = categoryOrder[a.category || ''] ?? 99;
+                    const orderB = categoryOrder[b.category || ''] ?? 99;
+                    return orderA - orderB;
+                  });
+
                   return (
-                    <div key={storeName} className="flex flex-col gap-3">
-                      <div className={`flex items-center gap-3 px-3 py-2 rounded-xl border shadow-sm ${brandProfile?.color || 'bg-gray-100 border-gray-200'}`}>
-                       {brandProfile?.imageLogo ? (
-  <img 
-  src={brandProfile.imageLogo} 
-  alt={`${storeName} logo`} 
-  // FIXED: Added fixed dimensions and centering to standardize all logos
-  className="h-6 w-16 object-contain object-left" 
-  onError={(e) => {
-    e.currentTarget.style.display = 'none';
-    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-  }}
-/>
-) : null}
-<span className={`font-black italic tracking-tighter uppercase text-sm ${brandProfile?.imageLogo ? 'hidden' : ''}`}>
-  {brandProfile?.logo || storeName}
-</span>
-                        <span className="ml-auto text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-black/10 text-current">
-                          {storeItems.length}
-                        </span>
-                      </div>
+                    <div key={storeName} className="mb-6 flex flex-col gap-3">
                       
+                      {/* STORE HEADER */}
+                      <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${brandProfile?.color || 'bg-white border-slate-200 text-slate-600'}`}>
+                        {brandProfile?.imageLogo ? (
+                          <img 
+                            src={brandProfile.imageLogo} 
+                            alt={`${storeName} logo`} 
+                            className="h-6 w-16 object-contain object-left" 
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                        ) : null}
+                        <span className={`font-black italic tracking-tighter uppercase text-sm ${brandProfile?.imageLogo ? 'hidden' : ''}`}>
+                          {brandProfile?.logo || storeName}
+                        </span>
+                        <div className="ml-auto bg-black/5 px-2 py-0.5 rounded-md">
+                          <span className="text-xs font-bold text-current">{itemsInStore.length}</span>
+                        </div>
+                      </div>
+
+                      {/* ITEMS LIST */}
                       <div className="flex flex-col gap-2">
-                        {storeItems.map((item: GroceryItem) => (
+                        {sortedItems.map((item: GroceryItem) => (
                           <ItemCard 
                             key={item.id} 
                             id={item.id} 
                             name={item.name} 
                             category={item.category || 'Unknown'} 
-                            icon={item.icon || 'shopping_bag'}
+                            icon={item.icon || 'shopping_bag'} 
                             inCart={item.inCart} 
-                            viewMode="list"
+                            viewMode="list" 
                             onToggleCart={handleToggleCart} 
-                            onDelete={handleDeleteItem}
-                            onEdit={() => setEditingItem(item)}
+                            onDelete={handleDeleteItem} 
+                            onEdit={() => setEditingItem(item)} 
                           />
                         ))}
                       </div>
+                      
                     </div>
                   );
                 })}
@@ -391,19 +429,24 @@ export default function App() {
                 Cart is empty. Tap the circles in your list to move items here.
               </p>
             ) : (
-               <>
+              <>
                 {cartTabItems.map((item: GroceryItem) => (
                   <ItemCard 
-                    key={item.id} id={item.id} name={item.name} 
-                    category={item.category || 'Unknown'} icon={item.icon || 'shopping_bag'}
-                    inCart={item.inCart} viewMode="cart"
-                    onToggleCart={handleToggleCart} onDelete={handleDeleteItem}
+                    key={item.id} 
+                    id={item.id} 
+                    name={item.name} 
+                    category={item.category || 'Unknown'} 
+                    icon={item.icon || 'shopping_bag'} 
+                    inCart={item.inCart} 
+                    viewMode="cart" 
+                    onToggleCart={handleToggleCart} 
+                    onDelete={handleDeleteItem} 
                   />
                 ))}
                 <button 
-  onClick={handleCompletePurchase}
-  className="mt-6 w-full bg-[#d3e3d8] text-[#174525] font-headline font-bold py-4 rounded-xl shadow-sm border border-[#b8d0c0] hover:bg-[#c2d6cb] transition-all flex justify-center items-center gap-2"
->
+                  onClick={handleCompletePurchase}
+                  className="mt-6 w-full bg-[#d3e3d8] text-[#174525] font-headline font-bold py-4 rounded-xl shadow-sm border border-[#b8d0c0] hover:bg-[#c2d6cb] transition-all flex justify-center items-center gap-2"
+                >
                   <span className="material-symbols-outlined text-xl">shopping_bag</span>
                   Complete Purchase
                 </button>
@@ -424,60 +467,37 @@ export default function App() {
                 </h2>
                 <p className="text-sm text-on-surface-variant">Items likely running out based on your velocity.</p>
               </div>
-
               <div className="flex flex-col gap-3">
-                {habitsDashboardData.filter(item => item.status === 'Restock Soon').map(item => (
-                  <div key={`due-${item.name}`} className="bg-surface-container-lowest p-4 rounded-2xl shadow-sm relative overflow-hidden group">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-surface-container rounded-full flex items-center justify-center text-2xl shadow-sm">
-                           <Icon icon={getItemIcon(item.name)} />
+                {habitsDashboardData.filter(item => item.status === 'Restock Soon').length === 0 ? (
+                  <p className="text-on-surface-variant text-sm bg-surface-container p-4 rounded-xl">
+                    You're all stocked up on your usuals!
+                  </p>
+                ) : (
+                  habitsDashboardData.filter(item => item.status === 'Restock Soon').map(item => (
+                    <div key={`rec-${item.name}`} className="bg-surface-container-low p-4 rounded-2xl flex items-center justify-between border border-primary/20 shadow-sm relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <Icon icon={getItemIcon(item.name)} className="text-xl drop-shadow-sm" />
+                          <span className="font-bold text-on-surface">{item.name}</span>
                         </div>
-                        <div>
-                          <h3 className="font-bold text-on-surface text-lg">{item.name}</h3>
-                          <p className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5 font-medium uppercase tracking-wider">
-                            {item.category} • {item.totalPurchases} purchases
-                          </p>
-                        </div>
+                        <span className="text-xs font-medium text-primary bg-primary/10 w-fit px-2 py-0.5 rounded-md mt-1">
+                          Bought {item.daysSinceLast} days ago
+                        </span>
                       </div>
-                      <span className="px-3 py-1 bg-error-container text-on-error text-[10px] font-bold rounded-full uppercase tracking-widest shadow-sm">
-                        Due
-                      </span>
+                      <button 
+                        onClick={() => handleAddFromHabits(item)}
+                        className="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-md hover:bg-primary/90 transition-transform active:scale-95"
+                      >
+                        <span className="material-symbols-outlined font-bold">add</span>
+                      </button>
                     </div>
-
-                    <div className="mb-4">
-                      <div className="flex justify-between text-xs text-on-surface-variant mb-1.5 font-semibold">
-                        <span>Bought {item.daysSinceLast} days ago</span>
-                        <span>{item.avgIntervalDays} day cycle</span>
-                      </div>
-                      <div className="w-full bg-surface-container-high rounded-full h-2.5 overflow-hidden">
-                        <div 
-                          className="bg-error h-full rounded-full transition-all duration-1000 ease-out" 
-                          style={{ width: `${item.progressPercent}%` }}
-                        ></div>
-                      </div>
-                    </div>
-
-                    <button 
-                      onClick={() => handleAddFromHabits(item)}
-                      className="w-full bg-surface-container text-primary font-semibold py-2.5 rounded-xl text-sm transition-colors hover:bg-surface-container-high flex items-center justify-center gap-2"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">add</span>
-                      Add to List
-                    </button>
-                  </div>
-                ))}
-                
-                {habitsDashboardData.filter(item => item.status === 'Restock Soon').length === 0 && (
-                  <div className="bg-surface-container-lowest p-6 rounded-2xl text-center text-on-surface-variant">
-                    <span className="material-symbols-outlined text-4xl mb-2 text-primary/40">check_circle</span>
-                    <p className="font-medium">You are fully stocked on your routine items.</p>
-                  </div>
+                  ))
                 )}
               </div>
             </section>
 
-            {/* SECTION 2: HABITS BY CATEGORY */}
+            {/* SECTION 2: ALL HABITS BY CATEGORY */}
             <section>
               <div className="mb-4 px-1">
                 <h2 className="text-xl font-headline font-bold text-on-surface mb-1">My Grocery Habits</h2>
@@ -491,24 +511,17 @@ export default function App() {
                   </h3>
                   <div className="flex flex-col gap-2">
                     {habitsDashboardData.filter(item => item.category === category).map(item => (
-                      <div key={`all-${item.name}`} className="bg-surface-container-lowest p-3 rounded-xl flex items-center justify-between">
+                      <div key={`all-${item.name}`} className="bg-surface-container-lowest p-3 rounded-xl flex items-center justify-between shadow-sm border border-outline-variant/30">
                         <div className="flex items-center gap-3">
-                           <div className="w-10 h-10 bg-surface-container rounded-full flex items-center justify-center text-xl">
-                              <Icon icon={getItemIcon(item.name)} />
-                           </div>
-                           <div>
-                              <h4 className="font-bold text-on-surface text-sm">{item.name}</h4>
-                              {item.avgIntervalDays !== null ? (
-                                <p className="text-[10px] text-on-surface-variant mt-0.5">
-                                  {item.daysSinceLast} / {item.avgIntervalDays} days
-                                </p>
-                              ) : (
-                                <div className="flex items-center gap-1 mt-0.5 text-on-surface-variant/80">
-                                  <Icon icon="streamline-flex-color:critical-thinking-2-flat" className="text-[14px] animate-pulse opacity-90" />
-                                  <p className="text-[10px] italic">Purchase again to start tracking.</p>
-                                </div>
-                              )}                           
-                           </div>
+                          <div className="w-10 h-10 bg-surface-container rounded-lg flex items-center justify-center">
+                            <Icon icon={getItemIcon(item.name)} className="text-xl" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="font-bold text-on-surface text-sm">{item.name}</span>
+                            <span className="text-[11px] text-on-surface-variant">
+                              {item.avgIntervalDays ? `Buys every ~${item.avgIntervalDays} days` : 'Need more data'}
+                            </span>
+                          </div>
                         </div>
                         <div className="flex items-center gap-3">
                            {item.status === 'Stocked' && (
