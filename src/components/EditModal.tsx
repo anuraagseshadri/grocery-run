@@ -68,24 +68,28 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
 
   return (
     <div 
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 z-50 animate-fade-in"
+      // FIXED: Removed "items-end" so it perfectly centers on mobile, avoiding the bottom browser bar
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
       onClick={onClose} 
     >
       <div 
-        className="bg-white text-slate-900 rounded-3xl p-6 w-full max-w-md shadow-2xl flex flex-col gap-6"
+        // FIXED: Changed max-h-[85vh] to max-h-[75vh] to guarantee it fits on smaller phone screens
+        className="bg-white text-slate-900 rounded-3xl w-full max-w-md shadow-2xl flex flex-col max-h-[75vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()} 
       >
         
-        <div className="flex justify-between items-center">
+        {/* ================= MODAL HEADER (Sticky) ================= */}
+        <div className="flex justify-between items-center p-6 pb-4 shrink-0">
           <h2 className="text-2xl font-bold text-slate-800">Edit Item</h2>
           <button onClick={onClose} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:text-slate-800 transition-colors">
             <span className="material-symbols-outlined text-xl">close</span>
           </button>
         </div>
 
-        <div className="flex flex-col gap-5">
+        {/* ================= MODAL BODY (Scrollable) ================= */}
+        <div className="flex flex-col gap-6 px-6 py-2 overflow-y-auto">
           {/* ITEM NAME INPUT */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 shrink-0">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Item Name</label>
             <input 
               value={name} 
@@ -95,7 +99,7 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
           </div>
 
           {/* STORE SELECTOR */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 shrink-0">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Store</label>
             <div className="flex flex-wrap gap-2">
               {STORE_OPTIONS.map((s) => {
@@ -121,7 +125,7 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
           </div>
 
           {/* CATEGORY SELECTOR */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 shrink-0">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Category</label>
             <div className="grid grid-cols-3 gap-2">
               {CATEGORIES.map((c) => {
@@ -151,8 +155,8 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
           </div>
         </div>
 
-        {/* ================= MODAL FOOTER ================= */}
-        <div className="flex justify-between items-center mt-4 pt-5 border-t border-slate-100 gap-6">
+        {/* ================= MODAL FOOTER (Sticky) ================= */}
+        <div className="flex justify-between items-center p-6 pt-5 mt-2 border-t border-slate-100 gap-6 shrink-0 bg-white">
           
           <button 
             onClick={() => onForget(item.name)} 
@@ -170,7 +174,6 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
               Cancel
             </button>
             
-            {/* FIXED: The Save button tag is completely closed properly now */}
             <button 
               onClick={handleSave} 
               className="flex-1 py-2.5 bg-[#d3e3d8] text-[#174525] rounded-xl font-bold shadow-sm border border-[#b8d0c0] hover:bg-[#c2d6cb] transition-all active:scale-95"
