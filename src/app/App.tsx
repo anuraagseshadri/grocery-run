@@ -7,9 +7,7 @@ import { Toast } from '../components/Toast';
 import { autoTagItem } from '../tagger';
 import { STORE_OPTIONS, getItemIcon } from '../constants';
 import { Logo } from '../components/Logo';
-// 1. ADD THIS LINE near your other imports:
 import { Icon } from '@iconify/react';
-
 import { db } from '../firebase';
 import { 
   collection, onSnapshot, addDoc, doc, updateDoc, 
@@ -38,16 +36,26 @@ interface GroceryItem {
   createdAt?: string;
 }
 
-// Place this at the top of App.tsx, outside the App function
-
 const isDuplicateItem = (newItem: string, existingItem: string) => {
   const a = newItem.trim().toLowerCase();
   const b = existingItem.trim().toLowerCase();
-  if (a === b) return true; 
-  if (a + 's' === b || b + 's' === a) return true; 
-  if (a + 'es' === b || b + 'es' === a) return true; 
+  if (a === b) return true;
+  if (a + 's' === b || b + 's' === a) return true;
+  if (a + 'es' === b || b + 'es' === a) return true;
   if (a.replace(/y$/, 'ies') === b || b.replace(/y$/, 'ies') === a) return true; 
   return false;
+};
+
+// PREDICTIVE ENGINE: Cold Start Dictionary
+const DEFAULT_VELOCITY: Record<string, number> = {
+  'milk': 7,
+  'eggs': 14,
+  'bread': 7,
+  'bananas': 5,
+  'coffee': 30,
+  'olive oil': 60,
+  'paper towels': 30,
+  'laundry detergent': 45
 };
 
 export default function App() {
@@ -57,24 +65,23 @@ export default function App() {
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
- useEffect(() => {
-  const unsubscribeItems = onSnapshot(collection(db, 'items'), (snapshot) => {
-    const liveItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroceryItem));
-    setItems(liveItems);
-  });
+  useEffect(() => {
+    const unsubscribeItems = onSnapshot(collection(db, 'items'), (snapshot) => {
+      const liveItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroceryItem));
+      setItems(liveItems);
+    });
 
-  const unsubscribeHistory = onSnapshot(collection(db, 'purchaseHistory'), (snapshot) => {
-    const liveHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    setPurchaseHistory(liveHistory);
-  });
+    const unsubscribeHistory = onSnapshot(collection(db, 'purchaseHistory'), (snapshot) => {
+      const liveHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPurchaseHistory(liveHistory);
+    });
 
-  return () => {
-    unsubscribeItems();
-    unsubscribeHistory();
-  };
-}, []);
+    return () => {
+      unsubscribeItems();
+      unsubscribeHistory();
+    };
+  }, []);
 
-  // UPDATED: Fetches learned category from CLOUD (Firestore) instead of local cache
   const handleAddItem = async (newItemName: string) => {
     const nameKey = newItemName.toLowerCase().trim();
     const existingMatch = items.find(item => isDuplicateItem(newItemName, item.name));
@@ -84,16 +91,14 @@ export default function App() {
       return; 
     }
 
-    // PHASE 3: Cloud Learning Retrieval
     const prefRef = doc(db, 'preferences', nameKey);
     const prefSnap = await getDoc(prefRef);
     const learnedCat = prefSnap.exists() ? prefSnap.data().category : null;
-
     const { category: autoCat, icon, store } = autoTagItem(newItemName);
 
     await addDoc(collection(db, 'items'), {
       name: newItemName.trim(),
-      category: learnedCat || autoCat, // Preference takes priority
+      category: learnedCat || autoCat, 
       icon, 
       store,
       inCart: false, 
@@ -110,23 +115,18 @@ export default function App() {
     await deleteDoc(doc(db, 'items', id));
   };
 
-  // UPDATED: Now records manual category changes into Cloud Preferences
   const handleUpdateItem = async (id: string, updates: Partial<GroceryItem>) => {
     if (updates.category && updates.name) {
       const nameKey = updates.name.toLowerCase().trim();
-      
-      // PHASE 3: Cloud Learning Trigger
       await setDoc(doc(db, 'preferences', nameKey), {
         category: updates.category,
         updatedAt: new Date().toISOString()
       }, { merge: true });
     }
-
     await updateDoc(doc(db, 'items', id), updates);
     setEditingItem(null); 
   };
 
-  // NEW: surgically forgets a specific item-category link in the Cloud
   const handleForgetPreference = async (name: string) => {
     const nameKey = name.toLowerCase().trim();
     await deleteDoc(doc(db, 'preferences', nameKey));
@@ -155,11 +155,9 @@ export default function App() {
     setActiveTab('list'); 
   };
   
-  // 2. THE LIST DEFINITIONS
-  const listTabItems = items; 
+  const listTabItems = items;
   const cartTabItems = items.filter(item => item.inCart);
 
-  // 3. THE STORE GROUPING MATH
   const groupedByStore = listTabItems.reduce((groups, item) => {
     const rawStore = item.store?.trim() || 'Other';
     const officialStore = STORE_OPTIONS.find(
@@ -175,8 +173,6 @@ export default function App() {
   // ===================== DASHBOARD DATA ENGINE =====================
   const habitsDashboardData = useMemo(() => {
     const itemHistory: Record<string, { itemData: GroceryItem, dates: number[], count: number }> = {};
-
-    // 1. Extract exact timestamps and total purchase counts
     purchaseHistory.forEach(order => {
       if (!order.date || !order.items) return;
       const orderTime = new Date(order.date).getTime();
@@ -187,37 +183,40 @@ export default function App() {
           itemHistory[key] = { itemData: item, dates: [], count: 0 };
         }
         itemHistory[key].dates.push(orderTime);
-        itemHistory[key].count += 1; // Track lifetime volume
+        itemHistory[key].count += 1; 
       });
     });
 
     const now = new Date().getTime();
     const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
-    // 2. Calculate Velocity Metrics
     const dashboard = Object.values(itemHistory).map(record => {
-      let avgIntervalDays = null;
       let daysSinceLast = null;
       let status = 'Need Data';
       let progressPercent = 0;
+      const itemNameKey = record.itemData.name.toLowerCase();
+      
+      let effectiveInterval = DEFAULT_VELOCITY[itemNameKey] || null;
 
       if (record.dates.length >= 2) {
-        const sortedDates = record.dates.sort((a, b) => a - b);
+        // FIXED: Array Spread operator prevents state mutation
+        const sortedDates = [...record.dates].sort((a, b) => a - b);
         let totalIntervalMs = 0;
         
         for (let i = 1; i < sortedDates.length; i++) {
           totalIntervalMs += (sortedDates[i] - sortedDates[i - 1]);
         }
-        
-        avgIntervalDays = (totalIntervalMs / (sortedDates.length - 1)) / MS_PER_DAY;
+        effectiveInterval = (totalIntervalMs / (sortedDates.length - 1)) / MS_PER_DAY;
+      }
+
+      if (record.dates.length > 0 && effectiveInterval) {
+        const sortedDates = [...record.dates].sort((a, b) => a - b);
         const lastPurchaseTime = sortedDates[sortedDates.length - 1];
         daysSinceLast = (now - lastPurchaseTime) / MS_PER_DAY;
+        progressPercent = Math.min((daysSinceLast / effectiveInterval) * 100, 100);
 
-        // Calculate how close you are to running out (capped at 100%)
-        progressPercent = Math.min((daysSinceLast / avgIntervalDays) * 100, 100);
-
-        // Determine priority status
-        if (daysSinceLast >= (avgIntervalDays * 0.9) && avgIntervalDays < 45) {
+        // FIXED: Removed 45 day cap
+        if (daysSinceLast >= (effectiveInterval * 0.9)) {
           status = 'Restock Soon';
         } else {
           status = 'Stocked';
@@ -227,14 +226,13 @@ export default function App() {
       return {
         ...record.itemData,
         totalPurchases: record.count,
-        avgIntervalDays: avgIntervalDays ? Math.round(avgIntervalDays) : null,
-        daysSinceLast: daysSinceLast ? Math.round(daysSinceLast) : null,
+        avgIntervalDays: effectiveInterval ? Math.round(effectiveInterval) : null,
+        daysSinceLast: daysSinceLast !== null ? Math.round(daysSinceLast) : null,
         status,
         progressPercent
       };
     });
 
-    // 3. Sort: "Restock Soon" items at the top, then by progress percentage
     return dashboard.sort((a, b) => {
       if (a.status === 'Restock Soon' && b.status !== 'Restock Soon') return -1;
       if (b.status === 'Restock Soon' && a.status !== 'Restock Soon') return 1;
@@ -243,11 +241,10 @@ export default function App() {
   }, [purchaseHistory]);
 
 
-// ===================== REPLENISHMENT ENGINE =====================
+  // ===================== REPLENISHMENT ENGINE =====================
   const suggestedReplenishments = useMemo(() => {
     const itemHistory: Record<string, { itemData: GroceryItem, dates: number[] }> = {};
     
-    // 1. Extract all exact purchase timestamps
     purchaseHistory.forEach(order => {
       if (!order.date || !order.items) return;
       const orderTime = new Date(order.date).getTime(); 
@@ -265,27 +262,32 @@ export default function App() {
     const suggestions: GroceryItem[] = [];
     const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
-    // 2. Calculate Velocity and Compare against Current Date
     Object.values(itemHistory).forEach(record => {
-      if (record.dates.length < 2) return; // Need at least 2 purchases to find a pattern
+      const itemNameKey = record.itemData.name.toLowerCase();
+      let effectiveInterval = DEFAULT_VELOCITY[itemNameKey] || null;
 
-      const sortedDates = record.dates.sort((a, b) => a - b);
-      let totalIntervalMs = 0;
-      
-      for (let i = 1; i < sortedDates.length; i++) {
-        totalIntervalMs += (sortedDates[i] - sortedDates[i - 1]);
+      if (record.dates.length >= 2) {
+        // FIXED: Array mutation
+        const sortedDates = [...record.dates].sort((a, b) => a - b);
+        let totalIntervalMs = 0;
+        
+        for (let i = 1; i < sortedDates.length; i++) {
+          totalIntervalMs += (sortedDates[i] - sortedDates[i - 1]);
+        }
+        effectiveInterval = (totalIntervalMs / (sortedDates.length - 1)) / MS_PER_DAY;
       }
-      
-      const avgIntervalDays = (totalIntervalMs / (sortedDates.length - 1)) / MS_PER_DAY;
-      const lastPurchaseTime = sortedDates[sortedDates.length - 1];
-      const daysSinceLast = (now - lastPurchaseTime) / MS_PER_DAY;
 
-      // 3. Trigger: 90% of interval passed AND it is a regular staple (< 45 days)
-      if (daysSinceLast >= (avgIntervalDays * 0.9) && avgIntervalDays < 45) {
-        // Ensure it is not ALREADY on your active list before suggesting it
-        const alreadyOnList = items.some(i => i.name.toLowerCase() === record.itemData.name.toLowerCase());
-        if (!alreadyOnList) {
-          suggestions.push(record.itemData);
+      if (record.dates.length > 0 && effectiveInterval) {
+        const sortedDates = [...record.dates].sort((a, b) => a - b);
+        const lastPurchaseTime = sortedDates[sortedDates.length - 1];
+        const daysSinceLast = (now - lastPurchaseTime) / MS_PER_DAY;
+
+        // FIXED: Removed 45 day cap
+        if (daysSinceLast >= (effectiveInterval * 0.9)) {
+          const alreadyOnList = items.some(i => i.name.toLowerCase() === record.itemData.name.toLowerCase());
+          if (!alreadyOnList) {
+            suggestions.push(record.itemData);
+          }
         }
       }
     });
@@ -293,33 +295,32 @@ export default function App() {
     return suggestions;
   }, [purchaseHistory, items]);
 
-
   return (
-    
     <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
       <div className="w-full flex flex-col gap-6 pb-20">
         
         {activeTab === 'list' && (
           <>
-           <AddForm onAddItem={handleAddItem} />
+            <AddForm onAddItem={handleAddItem} />
             
-            {/* REPLENISHMENT NOTIFICATION BANNER */}
+            {/* REPLENISHMENT NOTIFICATION BANNER - UPDATED TO GARDEN FRESH UI */}
             {suggestedReplenishments.length > 0 && (
-              <div className="mb-6 p-4 bg-primary-container/40 border border-primary/30 rounded-2xl shadow-sm">
+              <div className="mb-6 p-4 bg-white/50 backdrop-blur-md border border-primary/10 rounded-2xl shadow-[0_4px_20px_-4px_rgba(23,106,33,0.05)]">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="material-symbols-outlined text-primary text-xl">notifications_active</span>
-                  <h3 className="font-headline font-bold text-primary">You might be running out of:</h3>
+                  <span className="material-symbols-outlined text-primary text-xl">auto_awesome</span>
+                  <h3 className="font-headline font-bold text-slate-800 tracking-tight">You might be running out of:</h3>
                 </div>
+                
                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                   {suggestedReplenishments.map(item => (
                     <button
                       key={`suggest-${item.name}`}
                       onClick={() => handleAddFromHabits(item)}
-                      className="whitespace-nowrap flex items-center gap-2 px-4 py-2 bg-surface rounded-full shadow-sm border border-outline-variant/30 hover:border-primary transition-colors text-sm font-medium text-on-surface"
+                      className="whitespace-nowrap flex items-center gap-1.5 px-4 py-2 bg-transparent rounded-full border border-primary/20 hover:border-primary/50 hover:bg-primary/5 transition-all text-sm font-bold text-slate-700"
                     >
                       <Icon icon={getItemIcon(item.name)} className="text-lg" />
                       {item.name}
-                      <span className="material-symbols-outlined text-[16px] text-on-surface-variant ml-1">add_circle</span>
+                      <span className="material-symbols-outlined text-[14px] text-primary/60 ml-0.5">add_circle</span>
                     </button>
                   ))}
                 </div>
@@ -333,28 +334,42 @@ export default function App() {
                 {Object.keys(groupedByStore).sort().map((storeName) => {
                   const storeItems = groupedByStore[storeName];
                   const brandProfile = STORE_OPTIONS.find(s => s.name === storeName) || STORE_OPTIONS.find(s => s.name === 'Other');
+                  
                   return (
                     <div key={storeName} className="flex flex-col gap-3">
-                     {/* Find this section in your App.tsx and replace it */}
-
-                  
-              
-
-<div className={`flex items-center gap-3 px-3 py-2 rounded-xl border shadow-sm ${brandProfile?.color || 'bg-gray-100 border-gray-200'}`}>
-  <span className="font-black italic tracking-tighter uppercase text-sm">
-    {brandProfile?.logo || storeName}
-  </span>
-  <span className="ml-auto text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-black/10 text-current">
-    {storeItems.length}
-  </span>
-</div>
+                      <div className={`flex items-center gap-3 px-3 py-2 rounded-xl border shadow-sm ${brandProfile?.color || 'bg-gray-100 border-gray-200'}`}>
+                       {brandProfile?.imageLogo ? (
+  <img 
+  src={brandProfile.imageLogo} 
+  alt={`${storeName} logo`} 
+  // FIXED: Added fixed dimensions and centering to standardize all logos
+  className="h-6 w-16 object-contain object-left" 
+  onError={(e) => {
+    e.currentTarget.style.display = 'none';
+    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+  }}
+/>
+) : null}
+<span className={`font-black italic tracking-tighter uppercase text-sm ${brandProfile?.imageLogo ? 'hidden' : ''}`}>
+  {brandProfile?.logo || storeName}
+</span>
+                        <span className="ml-auto text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-black/10 text-current">
+                          {storeItems.length}
+                        </span>
+                      </div>
+                      
                       <div className="flex flex-col gap-2">
                         {storeItems.map((item: GroceryItem) => (
                           <ItemCard 
-                            key={item.id} id={item.id} name={item.name} 
-                            category={item.category || 'Unknown'} icon={item.icon || 'shopping_bag'}
-                            inCart={item.inCart} viewMode="list"
-                            onToggleCart={handleToggleCart} onDelete={handleDeleteItem}
+                            key={item.id} 
+                            id={item.id} 
+                            name={item.name} 
+                            category={item.category || 'Unknown'} 
+                            icon={item.icon || 'shopping_bag'}
+                            inCart={item.inCart} 
+                            viewMode="list"
+                            onToggleCart={handleToggleCart} 
+                            onDelete={handleDeleteItem}
                             onEdit={() => setEditingItem(item)}
                           />
                         ))}
@@ -367,7 +382,7 @@ export default function App() {
           </>
         )}
 
-       {/* ===================== CART TAB ===================== */}
+        {/* ===================== CART TAB ===================== */}
         {activeTab === 'cart' && (
           <div className="flex flex-col gap-3 mt-2">
             <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">Ready for Checkout</h2>
@@ -376,7 +391,7 @@ export default function App() {
                 Cart is empty. Tap the circles in your list to move items here.
               </p>
             ) : (
-              <>
+               <>
                 {cartTabItems.map((item: GroceryItem) => (
                   <ItemCard 
                     key={item.id} id={item.id} name={item.name} 
@@ -386,9 +401,9 @@ export default function App() {
                   />
                 ))}
                 <button 
-                  onClick={handleCompletePurchase}
-                  className="mt-6 w-full bg-primary text-on-primary font-headline font-semibold py-4 rounded-xl shadow-md hover:bg-primary/90 transition-all flex justify-center items-center gap-2"
-                >
+  onClick={handleCompletePurchase}
+  className="mt-6 w-full bg-[#d3e3d8] text-[#174525] font-headline font-bold py-4 rounded-xl shadow-sm border border-[#b8d0c0] hover:bg-[#c2d6cb] transition-all flex justify-center items-center gap-2"
+>
                   <span className="material-symbols-outlined text-xl">shopping_bag</span>
                   Complete Purchase
                 </button>
@@ -398,10 +413,8 @@ export default function App() {
         )}
 
         {/* ===================== HABITS TAB ===================== */}
-       {/* ===================== REPLENISHMENT DASHBOARD UI ===================== */}
         {activeTab === 'habits' && (
           <div className="w-full flex flex-col gap-8 pb-24 animate-fade-in">
-            
             {/* SECTION 1: RECOMMENDED RESTOCKS */}
             <section>
               <div className="mb-4 px-1">
@@ -471,7 +484,6 @@ export default function App() {
                 <p className="text-sm text-on-surface-variant">All tracked items.</p>
               </div>
 
-              {/* Grouping Logic for Categories */}
               {Array.from(new Set(habitsDashboardData.map(item => item.category))).map(category => (
                 <div key={`cat-${category}`} className="mb-6">
                   <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-widest mb-3 pl-2">
@@ -485,19 +497,19 @@ export default function App() {
                               <Icon icon={getItemIcon(item.name)} />
                            </div>
                            <div>
-                             <h4 className="font-bold text-on-surface text-sm">{item.name}</h4>
-                            {item.avgIntervalDays !== null ? (
-    <p className="text-[10px] text-on-surface-variant mt-0.5">
-      {item.daysSinceLast} / {item.avgIntervalDays} days
-    </p>
-  ) : (
-    <div className="flex items-center gap-1 mt-0.5 text-on-surface-variant/80">
-      <Icon icon="streamline-flex-color:critical-thinking-2-flat" className="text-[14px] animate-pulse opacity-90" />
-      <p className="text-[10px] italic">Purchase again to start tracking.</p>
-    </div>
-  )}                           </div>
+                              <h4 className="font-bold text-on-surface text-sm">{item.name}</h4>
+                              {item.avgIntervalDays !== null ? (
+                                <p className="text-[10px] text-on-surface-variant mt-0.5">
+                                  {item.daysSinceLast} / {item.avgIntervalDays} days
+                                </p>
+                              ) : (
+                                <div className="flex items-center gap-1 mt-0.5 text-on-surface-variant/80">
+                                  <Icon icon="streamline-flex-color:critical-thinking-2-flat" className="text-[14px] animate-pulse opacity-90" />
+                                  <p className="text-[10px] italic">Purchase again to start tracking.</p>
+                                </div>
+                              )}                           
+                           </div>
                         </div>
-                        
                         <div className="flex items-center gap-3">
                            {item.status === 'Stocked' && (
                              <div className="w-16 bg-surface-container-high rounded-full h-1.5 overflow-hidden">
@@ -517,7 +529,6 @@ export default function App() {
                 </div>
               ))}
             </section>
-            
           </div>
         )}
       </div>

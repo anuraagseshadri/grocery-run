@@ -1,15 +1,25 @@
 export interface GroceryItem {
-  id: string | number;
+  id: string;
   name: string;
   category: string;
-  store: string; // Restores the missing store property
-  status: 'pending' | 'purchased';
-  
-  // Restores Supabase snake_case compatibility
-  purchase_count?: number;
-  purchase_dates?: string[]; 
-  checked_out?: boolean;
-  is_history?: boolean;
-  created_at?: string;
-  dismissed_at?: string | null;
+  icon: string;
+  store: string;
+  inCart: boolean;
+  createdAt?: string;
+}
+
+export interface PurchaseHistoryRecord {
+  id: string;
+  date: string;
+  items: GroceryItem[];
+}
+
+export interface StoreOption {
+  name: string;
+  color?: string;
+  logo?: string;
+}
+
+export interface CategoryOption {
+  name: string;
 }

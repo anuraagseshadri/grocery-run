@@ -1,3 +1,26 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  /* Store Branding Constants */
+  --color-superstore: #004EA5;
+  --color-costco: #E31837;
+  --color-walmart: #0071CE;
+  --color-nofrills: #FADC00;
+  --color-freshco: #03A64A;
+  --color-shoppers: #E21836;
+  --color-metro: #ee3124;
+
+  /* Garden Fresh Design System Tokens */
+  --color-primary: #176a21;
+  --color-garden-bg: #fcf9f0;
+  --color-text-main: #1c241e; /* Dark forest neutral to avoid harsh #000 black */
+}
+
+/* Base Style Overrides */
+body {
+  @apply bg-garden-bg text-text-main antialiased min-h-screen;
+}
+
+html {
+  @apply bg-garden-bg;
+}

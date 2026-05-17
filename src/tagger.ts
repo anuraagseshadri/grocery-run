@@ -3,7 +3,7 @@ export function autoTagItem(itemName: string) {
   const lower = itemName.toLowerCase();
   
   if (lower.includes('milk') || lower.includes('egg') || lower.includes('cheese') || lower.includes('yogurt')) {
-    return { category: 'Dairy', icon: 'local_drink', store: 'Loblaws' };
+    return { category: 'Dairy & Eggs', icon: 'local_drink', store: 'Loblaws' };
   }
   if (lower.includes('apple') || lower.includes('banana') || lower.includes('onion') || lower.includes('avocado') || lower.includes('tomato')) {
     return { category: 'Produce', icon: 'eco', store: 'Loblaws' };

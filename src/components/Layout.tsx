@@ -9,9 +9,10 @@ interface LayoutProps {
 
 export function Layout({ children, activeTab, setActiveTab }: LayoutProps) {
   return (
-    <div className="min-h-screen bg-background text-on-background relative">
-      {/* Header with the new Logo */}
-      <header className="sticky top-0 z-50 bg-surface-container-lowest/90 backdrop-blur-md border-b border-outline-variant/30 px-6 py-4">
+    <div className="min-h-screen bg-[#E4F6E8] text-slate-900 relative">
+      
+      {/* HEADER: Solid white with downward shadow */}
+      <header className="sticky top-0 z-40 bg-white px-4 pt-6 pb-4">
         <div className="flex items-center gap-3">
           <Logo className="w-8 h-8" /> 
           <h1 className="text-xl font-headline font-bold text-primary tracking-tight">
@@ -24,8 +25,8 @@ export function Layout({ children, activeTab, setActiveTab }: LayoutProps) {
         {children}
       </main>
 
-      {/* Bottom Navigation stays with original Icons */}
-      <nav className="fixed bottom-0 w-full bg-surface-container-lowest/90 backdrop-blur-md border-t border-outline-variant/30 pb-safe pt-2 px-6 flex justify-around items-center z-50">
+      {/* FOOTER NAV: Removed blur, forced solid bg-white, added upward shadow */}
+    <nav className="fixed bottom-0 w-full bg-white pb-safe pt-2 px-6 flex justify-around items-center z-50">
         <NavButton 
           icon="list" 
           label="List" 

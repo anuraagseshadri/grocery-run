@@ -1,55 +1,60 @@
 import React, { useState } from 'react';
+import { Icon } from '@iconify/react';
+import { getItemIcon } from '../constants';
 
-// We define the "cable" that will connect this form to the main app
 interface AddFormProps {
-  onAddItem: (name: string, category: string) => void;
+  onAddItem: (name: string) => void;
 }
 
+// Your standard quick-add items
+const QUICK_ITEMS = ['Milk', 'Eggs', 'Bread', 'Bananas'];
+
 export function AddForm({ onAddItem }: AddFormProps) {
-  const [inputValue, setInputValue] = useState('');
+  const [input, setInput] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault(); 
-    if (!inputValue.trim()) return;
-    
-    // Send the typed item out to the main app!
-    onAddItem(inputValue.trim(), 'Freshly Added');
-    setInputValue(''); 
+    e.preventDefault();
+    if (input.trim()) {
+      onAddItem(input);
+      setInput('');
+    }
   };
-
-  const handleChipClick = (suggestion: string) => {
-    // Send the clicked chip out to the main app!
-    onAddItem(suggestion, 'Quick Add');
-  };
-
-  const suggestions = ['Eggs', 'Milk', 'Sourdough Bread', 'Paper Towels', 'Avocados'];
 
   return (
-    <div className="w-full flex flex-col gap-3">
-      <form onSubmit={handleSubmit} className="relative w-full">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3 mb-2">
+      <div className="relative">
         <input
           type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
           placeholder="Add an item..."
-          className="w-full bg-surface-container-highest text-on-surface placeholder:text-on-surface-variant font-body px-6 py-4 rounded-full focus:outline-none focus:ring-2 focus:ring-primary shadow-inner transition-all"
+          className="w-full p-4 pr-12 rounded-2xl border border-primary/10 bg-white focus:border-primary focus:ring-0 outline-none transition-all shadow-[0_2px_10px_-4px_rgba(23,106,33,0.05)] text-slate-800 font-medium"
         />
-        <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none opacity-40 flex items-center justify-center">
-           <span className="material-symbols-outlined text-xl">keyboard_return</span>
-        </div>
-      </form>
+        <button
+          type="submit"
+          disabled={!input.trim()}
+          className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-primary text-white rounded-xl flex items-center justify-center disabled:opacity-50 disabled:bg-slate-200 transition-all shadow-md active:scale-95"
+        >
+          <span className="material-symbols-outlined font-bold">add</span>
+        </button>
+      </div>
 
-      <div className="flex overflow-x-auto pb-2 gap-2 w-full [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        {suggestions.map((item) => (
+      {/* THE QUICK ADD ROW */}
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        {QUICK_ITEMS.map(item => (
           <button
-            key={item}
-            onClick={() => handleChipClick(item)}
-            className="whitespace-nowrap px-4 py-2 bg-surface-container-low text-primary-dim font-label text-sm rounded-full border border-outline-variant/30 hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm"
+            key={`quick-${item}`}
+            type="button"
+            onClick={() => onAddItem(item)}
+            // FIXED: bg-transparent, subtle green border, dark slate text
+            className="whitespace-nowrap flex items-center gap-1.5 px-4 py-2 bg-transparent rounded-full border border-primary/20 hover:border-primary/50 hover:bg-primary/5 transition-all text-sm font-bold text-slate-700"
           >
-            + {item}
+            <Icon icon={getItemIcon(item)} className="text-lg" />
+            {item}
+            <span className="material-symbols-outlined text-[14px] text-slate-400 ml-0.5">add</span>
           </button>
         ))}
       </div>
-    </div>
+    </form>
   );
 }

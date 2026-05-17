@@ -1,49 +1,74 @@
 import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { db } from '../firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { STORE_OPTIONS, CATEGORIES, getItemIcon } from '../constants';
+import { Icon } from '@iconify/react';
 
-interface AddItemFormProps {
-  onAddItem: (name: string, category?: string, store?: string) => void;
-  categories: string[];
-  stores: string[]; // Restores the missing stores prop
-}
-
-export function AddItemForm({ onAddItem, categories, stores }: AddItemFormProps) {
+export default function AddItemForm() {
   const [name, setName] = useState('');
-  const [selectedStore, setSelectedStore] = useState(stores[0] || 'Unassigned');
+  const [store, setStore] = useState(STORE_OPTIONS[0].name);
+  const [category, setCategory] = useState(CATEGORIES[0].name);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    
-    onAddItem(name, undefined, selectedStore);
-    setName('');
+
+    try {
+      await addDoc(collection(db, 'items'), {
+        name: name.trim(),
+        store,
+        category,
+        icon: getItemIcon(name),
+        completed: false,
+        createdAt: serverTimestamp(),
+      });
+      setName('');
+    } catch (error) {
+      console.error("Error adding document: ", error);
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2 w-full">
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Add item..."
-        className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm"
-      />
-      <select
-        value={selectedStore}
-        onChange={(e) => setSelectedStore(e.target.value)}
-        className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-sm"
-      >
-        {stores.map(store => (
-          <option key={store} value={store}>{store}</option>
-        ))}
-      </select>
-      <button 
-        type="submit" 
-        disabled={!name.trim()}
-        className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white p-3 rounded-xl shadow-sm transition-colors flex items-center justify-center"
-      >
-        <Plus className="w-5 h-5" />
-      </button>
+    <form onSubmit={handleSubmit} className="p-4 bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
+      <div className="flex flex-col gap-3">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Add new item (e.g. Milk)"
+          className="w-full p-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+        />
+        
+        <div className="grid grid-cols-2 gap-2">
+          <select 
+            value={store} 
+            onChange={(e) => setStore(e.target.value)}
+            className="p-2 rounded-lg border border-slate-200 bg-slate-50 text-sm"
+          >
+            {STORE_OPTIONS.map(s => (
+              <option key={s.name} value={s.name}>{s.name}</option>
+            ))}
+          </select>
+
+          <select 
+            value={category} 
+            onChange={(e) => setCategory(e.target.value)}
+            className="p-2 rounded-lg border border-slate-200 bg-slate-50 text-sm"
+          >
+            {CATEGORIES.map(c => (
+              <option key={c.name} value={c.name}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <button 
+          type="submit"
+          className="w-full bg-primary text-white p-3 rounded-lg font-bold hover:bg-opacity-90 transition-all flex items-center justify-center gap-2"
+        >
+          <Icon icon="mdi:plus" className="w-5 h-5" />
+          Add to List
+        </button>
+      </div>
     </form>
   );
 }
