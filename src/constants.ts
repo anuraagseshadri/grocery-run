@@ -173,5 +173,11 @@ export const getItemIcon = (name: string): string => {
   if (n.includes('water')) return 'fluent-emoji-flat:droplet';
   if (n.includes('pill') || n.includes('med') || n.includes('vitamin')) return 'fluent-emoji-flat:pill';
 
+  // ==========================================
+  // FROZEN
+  // ==========================================
+  if (n.includes('ice cream')) return 'fluent-emoji-flat:ice-cream';
+  if (n.includes('frozen')) return 'fluent-emoji-flat:snowflake';
+
   return 'fluent-emoji-flat:shopping-bags';
 };
