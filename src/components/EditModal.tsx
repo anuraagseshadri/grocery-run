@@ -14,17 +14,19 @@ interface EditModalProps {
 const getCategoryIcon = (categoryName: string) => {
   const iconMap: Record<string, string> = {
     'Produce': 'fluent-emoji-flat:leafy-green',
-    'Dairy & Eggs': 'fluent-emoji-flat:egg', 
     'Bakery': 'fluent-emoji-flat:croissant',
     'Meat & Seafood': 'fluent-emoji-flat:cut-of-meat', 
-    'Pantry & Snacks': 'fluent-emoji-flat:popcorn', 
-    'Rice & Cereal': 'fluent-emoji-flat:bowl-with-spoon',
+    'Dairy & Eggs': 'fluent-emoji-flat:egg', 
+    'Rice & Wheat': 'fluent-emoji-flat:sheaf-of-rice', 
+    'Pasta & Noodles': 'fluent-emoji-flat:spaghetti',  
+    'Breakfast & Cereal': 'fluent-emoji-flat:bowl-with-spoon',
+    'Cooking Essentials': 'fluent-emoji-flat:salt',
+    'Dessert & Snacks': 'fluent-emoji-flat:cookie',
     'Beverages': 'fluent-emoji-flat:tropical-drink', 
     'Drinks & Beverages': 'fluent-emoji-flat:tropical-drink',
     'Frozen': 'fluent-emoji-flat:snowflake',
     'Household & Cleaning': 'fluent-emoji-flat:roll-of-paper', 
     'Pharmacy & Personal Care': 'fluent-emoji-flat:soap', 
-    'Pets': 'fluent-emoji-flat:dog-face',
     'Baby': 'fluent-emoji-flat:baby-bottle',
     'General': 'fluent-emoji-flat:shopping-bags'
   };

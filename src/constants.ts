@@ -57,19 +57,42 @@ export const STORE_OPTIONS = [
 // CRITICAL: App.tsx expects 'CATEGORIES', so we use that name here.
 export const CATEGORIES = [
   { name: 'Produce', icon: 'mdi:leaf' },
-  { name: 'Dairy & Eggs', icon: 'mdi:egg-outline' },
   { name: 'Bakery', icon: 'mdi:bread-slice' },
   { name: 'Meat & Seafood', icon: 'mdi:food-drumstick' },
-  { name: 'Pantry & Snacks', icon: 'mdi:cookie' },
-  { name: 'Rice & Cereal', icon: 'fluent-emoji-flat:sheaf-of-rice' },
+  { name: 'Dairy & Eggs', icon: 'mdi:egg-outline' },
+  { name: 'Rice & Wheat', icon: 'mdi:barley' },
+  { name: 'Pasta & Noodles', icon: 'mdi:noodles' },
+  { name: 'Breakfast & Cereal', icon: 'mdi:bowl' },
+  { name: 'Cooking Essentials', icon: 'mdi:shaker' },
+  { name: 'Dessert & Snacks', icon: 'mdi:cookie' },
   { name: 'Beverages', icon: 'mdi:cup-water' },
   { name: 'Frozen', icon: 'mdi:snowflake' },
   { name: 'Household & Cleaning', icon: 'mdi:broom' },
   { name: 'Pharmacy & Personal Care', icon: 'mdi:pill' },
-  { name: 'Pets', icon: 'mdi:paw' },
   { name: 'Baby', icon: 'mdi:baby-carriage' },
   { name: 'General', icon: 'mdi:shopping-outline' }
 ];
+
+// Only declared ONCE here to prevent redeclaration errors
+export const getCategoryBgColor = (category?: string) => {
+  if (!category) return 'bg-gray-100 border-gray-200 text-gray-600';
+  const cat = category.trim();
+  switch (cat) {
+    case 'Produce': return 'bg-emerald-100 border-emerald-200 text-emerald-800';
+    case 'Bakery': return 'bg-orange-100 border-orange-200 text-orange-800';
+    case 'Meat': 
+    case 'Meat & Seafood': return 'bg-rose-100 border-rose-300 text-rose-800';
+    case 'Dairy & Eggs': return 'bg-amber-100 border-amber-200 text-amber-800';
+    case 'Rice & Wheat': return 'bg-yellow-100 border-yellow-300 text-yellow-800';
+    case 'Pasta & Noodles': return 'bg-red-50 border-red-200 text-red-700';
+    case 'Breakfast & Cereal': return 'bg-teal-100 border-teal-200 text-teal-800';
+    case 'Cooking Essentials': return 'bg-amber-50 border-amber-200 text-amber-700';
+    case 'Dessert & Snacks': return 'bg-indigo-100 border-indigo-200 text-indigo-800';
+    case 'Household & Cleaning': return 'bg-slate-200 border-slate-300 text-slate-700';
+    case 'General': return 'bg-stone-200 border-stone-300 text-stone-700';
+    default: return 'bg-gray-50 border-gray-200 text-gray-500';
+  }
+};
 
 export const getItemIcon = (name: string): string => {
   const n = name.toLowerCase().trim();
@@ -105,7 +128,7 @@ export const getItemIcon = (name: string): string => {
   if (n.includes('kiwi')) return 'fluent-emoji-flat:kiwi-fruit';
   if (n.includes('clementine') || n.includes('tangerine') || n.includes('mandarin')) return 'fluent-emoji-flat:tangerine';
   if (n.includes('coconut')) return 'fluent-emoji-flat:coconut';
- 
+
   // ==========================================
   // BAKERY, GRAINS & PANTRY
   // ==========================================
@@ -151,22 +174,4 @@ export const getItemIcon = (name: string): string => {
   if (n.includes('pill') || n.includes('med') || n.includes('vitamin')) return 'fluent-emoji-flat:pill';
 
   return 'fluent-emoji-flat:shopping-bags';
-};
-
-export const getCategoryBgColor = (category?: string) => {
-  if (!category) return 'bg-gray-100 border-gray-200 text-gray-600';
-  const cat = category.trim();
-  switch (cat) {
-    case 'Produce': return 'bg-emerald-100 border-emerald-200 text-emerald-800';
-    case 'Dairy & Eggs': return 'bg-amber-100 border-amber-200 text-amber-800';
-    case 'Bakery': return 'bg-orange-100 border-orange-200 text-orange-800';
-    case 'Pantry & Snacks': return 'bg-indigo-100 border-indigo-200 text-indigo-800';
-    case 'Rice & Cereal': return 'bg-teal-100 border-teal-200 text-teal-800';
-    // Combined the cases to avoid the "Duplicate Case" error
-    case 'Meat': 
-    case 'Meat & Seafood': return 'bg-rose-100 border-rose-300 text-rose-800';
-    case 'Household & Cleaning': return 'bg-slate-200 border-slate-300 text-slate-700';
-    case 'General': return 'bg-stone-200 border-stone-300 text-stone-700';
-    default: return 'bg-gray-50 border-gray-200 text-gray-500';
-  }
 };
