@@ -1,7 +1,27 @@
 import React from 'react';
 import { Icon } from '@iconify/react';
-import { getItemIcon, getCategoryBgColor } from '../constants'; 
+import { getItemIcon, getCategoryBgColor } from '../constants';
 import { LuCheck, LuTrash2, LuUndo } from 'react-icons/lu';
+
+// 1. DYNAMIC UI MAPPING: The UI now decides what icon to show based purely on the category string.
+const getCategoryIcon = (category?: string) => {
+  switch(category?.trim()) {
+    case 'Produce': return 'eco';    case 'Dairy & Eggs': return 'water_drop';
+    case 'Meat & Seafood': return 'set_meal';
+    case 'Pantry': return 'inventory_2';
+    case 'Bakery': return 'bakery_dining';
+    case 'Frozen': return 'ac_unit';
+    case 'Beverages': return 'local_drink';
+    case 'Household & Cleaning': return 'cleaning_services';
+    case 'Pharmacy & Personal Care': return 'medical_services';
+    case 'Dessert & Snacks': return 'cookie';
+    case 'Rice & Wheat': return 'rice_bowl'; 
+    case 'Pasta & Noodles': return 'ramen_dining'; 
+    case 'Breakfast & Cereal': return 'breakfast_dining'; 
+    case 'Cooking Essentials': return 'soup_kitchen'; 
+    default: return 'shopping_bag';
+  }
+};
 
 interface ItemCardProps {
   id: string | number;
@@ -9,7 +29,7 @@ interface ItemCardProps {
   inCart: boolean;
   viewMode?: string; 
   category?: string;
-  icon?: string;
+  // Note: 'icon' has been completely removed from this interface!
   onToggleCart: (id: any, inCart: boolean) => void;
   onDelete: (id: any) => void;
   onEdit?: (id: any) => void;
@@ -21,7 +41,6 @@ export function ItemCard({
   inCart, 
   viewMode, 
   category, 
-  icon, 
   onToggleCart, 
   onDelete, 
   onEdit 
@@ -32,7 +51,6 @@ export function ItemCard({
   return (
     <div className={`relative w-full p-4 rounded-xl border transition-all duration-300 flex flex-col gap-1 ${
       isListMode && inCart 
-        // FIXED: Applies the soft, distinct muted background block instead of going invisible
         ? 'bg-primary/5 border-primary/10 shadow-none' 
         : 'bg-white shadow-[0_4px_20px_-4px_rgba(23,106,33,0.08)] border-primary/5'
     }`}>
@@ -55,7 +73,6 @@ export function ItemCard({
           )}
 
           {/* MAIN PRODUCT ICON */}
-          {/* FIXED: Drains the color and fades the icon specifically when checked */}
           <div className={`text-2xl shrink-0 transition-all ${
             isListMode && inCart ? 'grayscale opacity-50' : 'text-primary'
           }`}>
@@ -84,8 +101,13 @@ export function ItemCard({
             <div className={`flex items-center gap-1 text-[10px] font-label px-2 py-1 rounded-md border shrink-0 transition-all ${
                isListMode && inCart ? 'opacity-50 grayscale' : ''
             } ${getCategoryBgColor(category)}`}>
-              <span className="material-symbols-outlined text-[14px] leading-none">{icon}</span>
-              <span className="whitespace-nowrap">{category}</span>
+              
+              {/* 2. IMPLEMENTATION: The icon is now dynamically generated on the fly */}
+              <span className="material-symbols-outlined text-[14px] leading-none">
+                {getCategoryIcon(category)}
+              </span>
+              
+              <span className="whitespace-nowrap">{category || 'Other'}</span>
             </div>
           )}
 

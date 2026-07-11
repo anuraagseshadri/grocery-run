@@ -2,7 +2,6 @@ export interface GroceryItem {
   id: string;
   name: string;
   category: string;
-  icon: string;
   store: string;
   inCart: boolean;
   createdAt?: string;

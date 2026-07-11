@@ -42,15 +42,17 @@ export const STORE_OPTIONS = [
     color: 'bg-white border-slate-200 text-slate-600', 
     logo: 'Other' 
   },
-  { 
+ { 
     name: 'Asian Grocery', 
-    logo: '🇨🇳 Asian Grocery', 
-    color: 'bg-white border-fuchsia-200 text-fuchsia-700' 
+    logo: '🍜 ASIAN GROCERY', 
+    // Implements a sleek, high-contrast crimson gradient
+    color: 'bg-gradient-to-r from-red-700 to-rose-900 text-white border-red-900 shadow-sm' 
   },
-  { 
+{ 
     name: 'Indian Grocery', 
-    logo: '🇮🇳 Indian Grocery', 
-    color: 'bg-white border-teal-200 text-teal-700'
+    logo: '🇮🇳 INDIAN GROCERY', 
+    // Implements a left-to-right gradient using exact flag hex codes
+    color: 'bg-gradient-to-r from-[#FF9933] via-[#FFFFFF] to-[#138808] text-slate-900 border-slate-300 shadow-sm'
   }
 ];
 
@@ -100,6 +102,9 @@ export const getItemIcon = (name: string): string => {
   // ==========================================
   // SPECIFIC/NEW ICONIFY MAPPINGS
   // ==========================================
+  if (n.includes('salt')) return 'fluent-emoji-flat:salt';
+  if (n.includes('sugar')) return 'mdi:cube-outline';
+  if (n.includes('paneer') || n.includes('cottage cheese')) return 'fluent-emoji-flat:cheese-wedge';
   if (n.includes('honey')) return 'fluent-emoji-flat:honey-pot';
   if (n.includes('breakfast')) return 'fluent-emoji-flat:shallow-pan-of-food';
   if (n.includes('fruit')) return 'game-icons:fruit-bowl';
