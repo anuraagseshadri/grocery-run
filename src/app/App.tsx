@@ -61,8 +61,8 @@ export default function App() {
   const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  
-  // NEW: State to track items dismissed in the current session
+
+  // State to track items dismissed in the current session
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
 
   const [hasDismissedReminder, setHasDismissedReminderState] = useState(() => {
@@ -78,7 +78,7 @@ export default function App() {
     }
   };
 
-  // NEW: Handler to add an item to the dismissed list
+  // Handler to add an item to the dismissed list
   const handleDismissSuggestion = (itemName: string) => {
     setDismissedSuggestions(prev => {
       const newSet = new Set(prev);
@@ -123,7 +123,6 @@ export default function App() {
     }
     
     const { category: autoCat, store } = autoTagItem(newItemName);
-
     try {
       await addDoc(collection(db, 'items'), {
         name: newItemName.trim(),
@@ -317,7 +316,6 @@ export default function App() {
           totalIntervalMs += (sortedDates[i] - sortedDates[i - 1]);
         }
         const rawIntervalDays = (totalIntervalMs / (sortedDates.length - 1)) / MS_PER_DAY;
-        
         effectiveInterval = Math.max(rawIntervalDays, 3);
       }
 
@@ -325,7 +323,6 @@ export default function App() {
         const sortedDates = [...record.dates].sort((a, b) => a - b);
         const lastPurchaseTime = sortedDates[sortedDates.length - 1];
         const daysSinceLast = (now - lastPurchaseTime) / MS_PER_DAY;
-        
         if (daysSinceLast >= (effectiveInterval * 0.9) && daysSinceLast > 2) {
           const alreadyOnList = items.some(i => i.name.toLowerCase() === record.itemData.name.toLowerCase());
           if (!alreadyOnList) {
@@ -452,12 +449,10 @@ export default function App() {
                       </div>
                     </div>
                   );
-
                   const categoryOrder = CATEGORIES.reduce((acc, cat, index) => {
                     acc[cat.name] = index;
                     return acc;
                   }, {} as Record<string, number>);
-
                   const sortedItems = [...itemsInStore].sort((a, b) => {
                     const orderA = categoryOrder[a.category || ''] ?? 99;
                     const orderB = categoryOrder[b.category || ''] ?? 99;
@@ -486,26 +481,6 @@ export default function App() {
                   );
                 })}
               </div>
-            )}
-            
-            {/* DATABASE CLEANUP BUTTON */}
-            {listTabItems.length > 0 && (
-              <button 
-                onClick={async () => {
-                  const snapshot = await getDocs(collection(db, 'items'));
-                  let count = 0;
-                  snapshot.forEach((docSnap) => {
-                    if (docSnap.data().icon !== undefined) {
-                      updateDoc(doc(db, 'items', docSnap.id), { icon: deleteField() });
-                      count++;
-                    }
-                  });
-                  alert(`Migration complete. Scrubbed icons from ${count} items.`);
-                }}
-                className="mt-8 p-4 bg-red-100 text-red-800 rounded-xl font-bold w-full active:scale-95 transition-transform"
-              >
-                RUN ONE-TIME DATABASE MIGRATION
-              </button>
             )}
           </>
         )}
@@ -537,9 +512,37 @@ export default function App() {
 
         {activeTab === 'habits' && (
           <div className="w-full flex flex-col gap-8 pb-24 animate-fade-in">
-             <section>
-               <h2 className="text-xl font-headline font-bold text-on-surface mb-4">Habits Dashboard</h2>
-              <p className="text-sm text-on-surface-variant">Your grocery velocity trends go here.</p>
+            <section>
+              <h2 className="text-xl font-headline font-bold text-on-surface mb-4">Habits Dashboard</h2>
+              <div className="flex flex-col gap-3">
+                {habitsDashboardData.map((habit, index) => (
+                  <div key={`${habit.id}-${index}`} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    <div className="flex justify-between items-center mb-2">
+                      <h3 className="font-bold text-slate-800 capitalize">{habit.name}</h3>
+                      <span className={`text-xs font-bold px-2 py-1 rounded-md ${habit.status === 'Restock Soon' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {habit.status}
+                      </span>
+                    </div>
+                    <div className="text-sm text-slate-600">
+                      <p>Total Purchases: {habit.totalPurchases}</p>
+                      <p>Average Restock: {habit.avgIntervalDays ? `${habit.avgIntervalDays} days` : 'Need more data'}</p>
+                      <p>Last Bought: {habit.daysSinceLast !== null ? `${habit.daysSinceLast} days ago` : 'Unknown'}</p>
+                    </div>
+                    
+                    {/* Progress Bar */}
+                    <div className="mt-3 h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all ${habit.status === 'Restock Soon' ? 'bg-red-500' : 'bg-emerald-500'}`}
+                        style={{ width: `${habit.progressPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                
+                {habitsDashboardData.length === 0 && (
+                  <p className="text-sm text-on-surface-variant text-center py-8">Complete a purchase to generate habit data.</p>
+                )}
+              </div>
             </section>
           </div>
         )}
