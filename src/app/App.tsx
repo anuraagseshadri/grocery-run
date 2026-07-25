@@ -562,7 +562,9 @@ export default function App() {
                               ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                               : habit.status === 'Restock Soon' 
                                 ? 'bg-red-100 text-red-700 hover:bg-red-200 shadow-sm' 
-                                : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 shadow-sm'
+                                : habit.status === 'Need Data'
+                                  ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 shadow-sm'
+                                  : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 shadow-sm'
                           }`}
                           aria-label={`Add ${habit.name} to list`}
                         >
@@ -602,7 +604,11 @@ export default function App() {
                       
                       <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
                         <div 
-                          className={`h-full transition-all ${habit.status === 'Restock Soon' ? 'bg-red-500' : 'bg-emerald-500'}`}
+                          className={`h-full transition-all ${
+                            habit.status === 'Restock Soon' ? 'bg-red-500' : 
+                            habit.status === 'Need Data' ? 'bg-amber-400' : 
+                            'bg-emerald-500'
+                          }`}
                           style={{ width: `${habit.progressPercent}%` }}
                         />
                       </div>
