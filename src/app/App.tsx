@@ -10,7 +10,7 @@ import { Icon } from '@iconify/react';
 import { db } from '../firebase';
 import { 
   collection, onSnapshot, addDoc, doc, updateDoc, 
-  deleteDoc, getDoc, setDoc, getDocs, deleteField 
+  deleteDoc, getDoc, setDoc 
 } from 'firebase/firestore';
 
 interface GroceryItem {
@@ -62,7 +62,7 @@ export default function App() {
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // State to track items dismissed in the current session
+  const [habitSearchQuery, setHabitSearchQuery] = useState('');
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
 
   const [hasDismissedReminder, setHasDismissedReminderState] = useState(() => {
@@ -78,7 +78,6 @@ export default function App() {
     }
   };
 
-  // Handler to add an item to the dismissed list
   const handleDismissSuggestion = (itemName: string) => {
     setDismissedSuggestions(prev => {
       const newSet = new Set(prev);
@@ -216,7 +215,8 @@ export default function App() {
   }, {} as Record<string, GroceryItem[]>);
 
   const habitsDashboardData = useMemo(() => {
-    const itemHistory: Record<string, { itemData: GroceryItem, dates: number[], count: number }> = {};
+    const itemHistory: Record<string, { itemData: GroceryItem, history: {date: number, store: string}[], count: number }> = {};
+    
     purchaseHistory.forEach(order => {
       if (!order.date || !order.items) return;
       const orderTime = new Date(order.date).getTime();
@@ -224,9 +224,12 @@ export default function App() {
       order.items.forEach((item: GroceryItem) => {
         const key = (item.name || '').toLowerCase();
         if (!itemHistory[key]) {
-          itemHistory[key] = { itemData: item, dates: [], count: 0 };
+          itemHistory[key] = { itemData: item, history: [], count: 0 };
         }
-        itemHistory[key].dates.push(orderTime);
+        itemHistory[key].history.push({ 
+          date: orderTime, 
+          store: item.store || 'Unknown' 
+        });
         itemHistory[key].count += 1; 
       });
     });
@@ -238,30 +241,34 @@ export default function App() {
       let daysSinceLast = null;
       let status = 'Need Data';
       let progressPercent = 0;
-      const itemNameKey = record.itemData.name.toLowerCase();
+      let lastPurchasedStore = 'Unknown';
       
+      const itemNameKey = record.itemData.name.toLowerCase();
       let effectiveInterval = DEFAULT_VELOCITY[itemNameKey] || null;
 
-      if (record.dates.length >= 2) {
-        const sortedDates = [...record.dates].sort((a, b) => a - b);
+      if (record.history.length >= 2) {
+        const sortedHistory = [...record.history].sort((a, b) => a.date - b.date);
         let totalIntervalMs = 0;
-        
-        for (let i = 1; i < sortedDates.length; i++) {
-          totalIntervalMs += (sortedDates[i] - sortedDates[i - 1]);
+        for (let i = 1; i < sortedHistory.length; i++) {
+          totalIntervalMs += (sortedHistory[i].date - sortedHistory[i - 1].date);
         }
-        effectiveInterval = (totalIntervalMs / (sortedDates.length - 1)) / MS_PER_DAY;
+        effectiveInterval = (totalIntervalMs / (sortedHistory.length - 1)) / MS_PER_DAY;
       }
 
-      if (record.dates.length > 0 && effectiveInterval) {
-        const sortedDates = [...record.dates].sort((a, b) => a - b);
-        const lastPurchaseTime = sortedDates[sortedDates.length - 1];
-        daysSinceLast = (now - lastPurchaseTime) / MS_PER_DAY;
-        progressPercent = Math.min((daysSinceLast / effectiveInterval) * 100, 100);
-
-        if (daysSinceLast >= (effectiveInterval * 0.9)) {
-          status = 'Restock Soon';
-        } else {
-          status = 'Stocked';
+      if (record.history.length > 0) {
+        const sortedHistory = [...record.history].sort((a, b) => a.date - b.date);
+        const lastPurchase = sortedHistory[sortedHistory.length - 1];
+        
+        lastPurchasedStore = lastPurchase.store;
+        daysSinceLast = (now - lastPurchase.date) / MS_PER_DAY;
+        
+        if (effectiveInterval) {
+          progressPercent = Math.min((daysSinceLast / effectiveInterval) * 100, 100);
+          if (daysSinceLast >= (effectiveInterval * 0.9)) {
+            status = 'Restock Soon';
+          } else {
+            status = 'Stocked';
+          }
         }
       }
 
@@ -270,6 +277,7 @@ export default function App() {
         totalPurchases: record.count,
         avgIntervalDays: effectiveInterval ? Math.round(effectiveInterval) : null,
         daysSinceLast: daysSinceLast !== null ? Math.round(daysSinceLast) : null,
+        lastPurchasedStore,
         status,
         progressPercent
       };
@@ -337,7 +345,6 @@ export default function App() {
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
       
-      {/* ABANDONED CART REMINDER */}
       {cartTabItems.length > 0 && !hasDismissedReminder && (
         <div className="fixed top-4 left-4 right-4 z-50 animate-fade-in">
           <div className="bg-red-50 border-2 border-red-200 rounded-2xl shadow-xl overflow-hidden p-4">
@@ -379,7 +386,6 @@ export default function App() {
           <>
             <AddForm onAddItem={handleAddItem} />
 
-            {/* SUGGESTED RESTOCKS */}
             {suggestedReplenishments.length > 0 && (
               <div className="mb-6 p-4 bg-white/50 backdrop-blur-md border border-primary/10 rounded-2xl shadow-[0_4px_20px_-4px_rgba(23,106,33,0.05)]">
                 <div className="flex items-center gap-2 mb-3">
@@ -413,7 +419,6 @@ export default function App() {
               </div>
             )}
 
-            {/* EMPTY STATE OR LIST */}
             {listTabItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center pt-16 pb-8 text-center px-4 animate-fade-in">
                 <div className="w-24 h-24 bg-surface-container-high rounded-full flex items-center justify-center mb-6">
@@ -427,13 +432,11 @@ export default function App() {
                   const itemsInStore = groupedByStore[storeName];
                   const officialStore = STORE_OPTIONS.find(s => s.name.toLowerCase() === storeName.toLowerCase());
                   
-                  // RESTORED STORE HEADER: Wide banner if logo exists, block format with dynamic colors if missing
                   const storeHeader = officialStore?.imageLogo ? (
                     <div className="flex items-center px-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm">
                       <img 
                         src={officialStore.imageLogo}
                         alt={storeName} 
-                        // UPDATED: Added max-w-[100px] sm:max-w-[120px] to act as a bounding box for horizontal wordmarks
                         className="h-5 sm:h-6 max-w-[100px] sm:max-w-[120px] object-contain object-left" 
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       />
@@ -510,37 +513,112 @@ export default function App() {
           </div>
         )}
 
+        {/* UPDATED HABITS TAB */}
         {activeTab === 'habits' && (
           <div className="w-full flex flex-col gap-8 pb-24 animate-fade-in">
             <section>
-              <h2 className="text-xl font-headline font-bold text-on-surface mb-4">Habits Dashboard</h2>
+              <div className="flex flex-col gap-4 mb-6">
+                <h2 className="text-xl font-headline font-bold text-on-surface">Habits Dashboard</h2>
+                
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+                  <input 
+                    type="text"
+                    placeholder="Find item history..."
+                    value={habitSearchQuery}
+                    onChange={(e) => setHabitSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow"
+                  />
+                  {habitSearchQuery && (
+                    <button 
+                      onClick={() => setHabitSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <span className="material-symbols-outlined text-sm">close</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div className="flex flex-col gap-3">
-                {habitsDashboardData.map((habit, index) => (
-                  <div key={`${habit.id}-${index}`} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-                    <div className="flex justify-between items-center mb-2">
-                      <h3 className="font-bold text-slate-800 capitalize">{habit.name}</h3>
-                      <span className={`text-xs font-bold px-2 py-1 rounded-md ${habit.status === 'Restock Soon' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                        {habit.status}
-                      </span>
+                {habitsDashboardData
+                  .filter(habit => habit.name.toLowerCase().includes(habitSearchQuery.toLowerCase().trim()))
+                  .map((habit, index) => (
+                    <div key={`${habit.id}-${index}`} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                      <div className="flex justify-between items-center mb-5">
+                        <h3 className="font-bold text-slate-800 capitalize">{habit.name}</h3>
+                        
+                        {/* INJECTED INTERACTIVE BUTTON */}
+                        <button 
+                          onClick={() => {
+                            const isAlreadyOnList = listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase());
+                            if (!isAlreadyOnList) {
+                              handleAddFromHabits(habit); 
+                            }
+                          }}
+                          disabled={listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase())}
+                          className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-md transition-all active:scale-95 ${
+                            listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase())
+                              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                              : habit.status === 'Restock Soon' 
+                                ? 'bg-red-100 text-red-700 hover:bg-red-200 shadow-sm' 
+                                : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 shadow-sm'
+                          }`}
+                          aria-label={`Add ${habit.name} to list`}
+                        >
+                          {listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase()) 
+                            ? 'Added to List' 
+                            : habit.status}
+                          
+                          {listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase()) ? (
+                            <span className="material-symbols-outlined text-[16px] font-bold">check</span>
+                          ) : (
+                            <span className="material-symbols-outlined text-[16px] font-bold">add</span>
+                          )}
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-2 text-sm text-slate-600 mb-3">
+                        <div>
+                          <span className="block text-xs text-slate-400">Purchases</span>
+                          <span className="font-medium">{habit.totalPurchases}</span>
+                        </div>
+                        <div>
+                          <span className="block text-xs text-slate-400">Avg Cycle</span>
+                          <span className="font-medium">{habit.avgIntervalDays ? `${habit.avgIntervalDays}d` : '--'}</span>
+                        </div>
+                        <div>
+                          <span className="block text-xs text-slate-400">Last Bought</span>
+                          <span className="font-medium">{habit.daysSinceLast !== null ? `${habit.daysSinceLast}d ago` : '--'}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 pt-3 border-t border-slate-100 mt-2">
+                        <span className="text-xs text-slate-400">Last bought from:</span>
+                        <span className="text-xs font-medium text-slate-700 capitalize">
+                          {habit.lastPurchasedStore}
+                        </span>
+                      </div>
+                      
+                      <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all ${habit.status === 'Restock Soon' ? 'bg-red-500' : 'bg-emerald-500'}`}
+                          style={{ width: `${habit.progressPercent}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="text-sm text-slate-600">
-                      <p>Total Purchases: {habit.totalPurchases}</p>
-                      <p>Average Restock: {habit.avgIntervalDays ? `${habit.avgIntervalDays} days` : 'Need more data'}</p>
-                      <p>Last Bought: {habit.daysSinceLast !== null ? `${habit.daysSinceLast} days ago` : 'Unknown'}</p>
-                    </div>
-                    
-                    {/* Progress Bar */}
-                    <div className="mt-3 h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full transition-all ${habit.status === 'Restock Soon' ? 'bg-red-500' : 'bg-emerald-500'}`}
-                        style={{ width: `${habit.progressPercent}%` }}
-                      />
-                    </div>
-                  </div>
                 ))}
                 
                 {habitsDashboardData.length === 0 && (
                   <p className="text-sm text-on-surface-variant text-center py-8">Complete a purchase to generate habit data.</p>
+                )}
+                
+                {habitsDashboardData.length > 0 && 
+                 habitSearchQuery && 
+                 habitsDashboardData.filter(h => h.name.toLowerCase().includes(habitSearchQuery.toLowerCase().trim())).length === 0 && (
+                  <p className="text-sm text-slate-500 text-center py-8 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    No purchase history found for "{habitSearchQuery}"
+                  </p>
                 )}
               </div>
             </section>
