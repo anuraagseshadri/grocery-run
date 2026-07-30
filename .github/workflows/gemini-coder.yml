@@ -13,7 +13,6 @@ permissions:
 
 jobs:
   gemini-fix:
-    # Runs when the issue title, body, label, or comment contains '/gemini'
     if: >
       contains(github.event.issue.labels.*.name, 'gemini') ||
       contains(github.event.issue.title, '/gemini') ||
@@ -29,7 +28,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install Google Gen AI SDK
         run: npm install @google/genai
@@ -46,11 +45,14 @@ jobs:
           const { execSync } = require("child_process");
 
           async function run() {
+            if (!process.env.GEMINI_API_KEY) {
+              throw new Error("GEMINI_API_KEY secret is missing in GitHub Repository Secrets.");
+            }
+
             const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
             
-            // Gather project .tsx and .ts files
             const files = execSync("git ls-files").toString().split("\n")
-              .filter(f => f.endsWith(".tsx") || f.endsWith(".ts") || f.endsWith(".js") || f.endsWith(".json"));
+              .filter(f => f.endsWith(".tsx") || f.endsWith(".ts") || f.endsWith(".js") || f.endsWith(".jsx") || f.endsWith(".json"));
 
             let codebase = "";
             for (const file of files.slice(0, 25)) {
@@ -69,31 +71,33 @@ jobs:
 
             Instructions:
             Implement the requested UI, content, or bug fix.
-            Return ONLY a JSON object mapping relative file paths to their full updated file contents.
-            Do NOT include markdown formatting or extra text outside the JSON object.
+            Return ONLY a valid JSON object mapping relative file paths to their full updated file contents.
+            Do NOT include any text or markdown formatting outside the JSON object.
             Example:
             {
               "src/components/Header.tsx": "updated content..."
             }`;
 
+            console.log("Sending task to Gemini API...");
             const response = await ai.models.generateContent({
               model: "gemini-2.5-flash",
               contents: prompt
             });
 
             let cleanJson = response.text.trim();
-            if (cleanJson.startsWith("```json")) cleanJson = cleanJson.replace(/^```json/, "").replace(/```$/, "").trim();
-            if (cleanJson.startsWith("```")) cleanJson = cleanJson.replace(/^```/, "").replace(/```$/, "").trim();
+            if (cleanJson.includes("{")) {
+              cleanJson = cleanJson.substring(cleanJson.indexOf("{"), cleanJson.lastIndexOf("}") + 1);
+            }
 
             const updates = JSON.parse(cleanJson);
             for (const [filePath, fileContent] of Object.entries(updates)) {
               fs.writeFileSync(filePath, fileContent, "utf8");
-              console.log("Updated file:", filePath);
+              console.log("Successfully updated file:", filePath);
             }
           }
 
           run().catch(err => {
-            console.error("Gemini failed:", err);
+            console.error("Gemini Error:", err.message || err);
             process.exit(1);
           });
           '
