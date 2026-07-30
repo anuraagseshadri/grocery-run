@@ -13,9 +13,11 @@ permissions:
 
 jobs:
   gemini-fix:
-    # Runs when an issue has the 'gemini' label OR a comment contains '/gemini'
+    # Runs when the issue title, body, label, or comment contains '/gemini'
     if: >
-      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'gemini')) ||
+      contains(github.event.issue.labels.*.name, 'gemini') ||
+      contains(github.event.issue.title, '/gemini') ||
+      contains(github.event.issue.body, '/gemini') ||
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/gemini'))
 
     runs-on: ubuntu-latest
