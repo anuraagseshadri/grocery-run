@@ -51,12 +51,30 @@ jobs:
 
             const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
             
-            // Focus on key React source files inside src/
-            const files = execSync("git ls-files").toString().split("\n")
-              .filter(f => f.startsWith("src/") && (f.endsWith(".tsx") || f.endsWith(".ts")));
+            // 1. Get all tracked files in the repo
+            const allFiles = execSync("git ls-files").toString().split("\n").filter(Boolean);
+            const issueText = `${process.env.ISSUE_TITLE} ${process.env.ISSUE_BODY}`.toLowerCase();
+
+            const selectedFiles = new Set();
+
+            // 2. Check for explicitly mentioned filenames (e.g. package.json, vite.config.ts)
+            for (const f of allFiles) {
+              const filename = f.split("/").pop();
+              if (filename && issueText.includes(filename.toLowerCase())) {
+                selectedFiles.add(f);
+              }
+            }
+
+            // 3. Fill up to 10 files with core React components in src/
+            for (const f of allFiles) {
+              if (selectedFiles.size >= 10) break;
+              if (f.startsWith("src/") && (f.endsWith(".tsx") || f.endsWith(".ts"))) {
+                selectedFiles.add(f);
+              }
+            }
 
             let codebase = "";
-            for (const file of files.slice(0, 8)) {
+            for (const file of Array.from(selectedFiles)) {
               if (fs.existsSync(file)) {
                 codebase += `\n=== FILE: ${file} ===\n` + fs.readFileSync(file, "utf8");
               }
@@ -79,7 +97,7 @@ jobs:
               "src/App.tsx": "updated content..."
             }`;
 
-            console.log("Sending task to Gemini API (gemini-1.5-flash)...");
+            console.log("Sending task to Gemini API with smart file context...");
 
             let attempts = 0;
             let response;
@@ -87,14 +105,14 @@ jobs:
               try {
                 attempts++;
                 response = await ai.models.generateContent({
-                  model: "gemini-1.5-flash",
+                  model: "gemini-2.5-flash",
                   contents: prompt
                 });
                 break;
               } catch (err) {
                 if (err.message && err.message.includes("429") && attempts < 3) {
-                  console.log(`Rate limit reached (429). Waiting 30 seconds before retry ${attempts}/3...`);
-                  await new Promise(r => setTimeout(r, 30000));
+                  console.log(`Rate limit reached (429). Waiting 20 seconds before retry ${attempts}/3...`);
+                  await new Promise(r => setTimeout(r, 20000));
                 } else {
                   throw err;
                 }
