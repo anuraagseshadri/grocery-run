@@ -64,9 +64,9 @@ jobs:
               }
             }
 
-            // 2. Second priority: Fill up to 3 total files with React components in src/
+            // 2. Second priority: Fill up to 6 total files with React components in src/
             for (const f of allFiles) {
-              if (selectedFiles.size >= 3) break;
+              if (selectedFiles.size >= 6) break;
               if (f.startsWith("src/") && (f.endsWith(".tsx") || f.endsWith(".ts"))) {
                 selectedFiles.add(f);
               }
@@ -91,7 +91,7 @@ jobs:
             Implement the requested UI, content, or bug fix.
             Return the updated file paths and their complete modified contents.`;
 
-            console.log("Sending task to Gemini API with Structured Output Schema...");
+            console.log("Sending task to Gemini API (6-file context)...");
 
             let attempts = 0;
             let response;
