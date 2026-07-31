@@ -95,7 +95,7 @@ jobs:
 
             let attempts = 0;
             let response;
-            while (attempts < 3) {
+            while (attempts < 4) {
               try {
                 attempts++;
                 response = await ai.models.generateContent({
@@ -124,8 +124,9 @@ jobs:
                 });
                 break;
               } catch (err) {
-                if (err.message && err.message.includes("429") && attempts < 3) {
-                  console.log(`Rate limit reached (429). Waiting 20 seconds before retry ${attempts}/3...`);
+                const isRetryable = err.message && (err.message.includes("429") || err.message.includes("503") || err.message.includes("UNAVAILABLE"));
+                if (isRetryable && attempts < 4) {
+                  console.log(`Server busy or rate limited. Waiting 20 seconds before retry ${attempts}/4...`);
                   await new Promise(r => setTimeout(r, 20000));
                 } else {
                   throw err;
