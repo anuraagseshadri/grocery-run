@@ -51,13 +51,12 @@ jobs:
 
             const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
             
-            // 1. Get all tracked files in the repo
             const allFiles = execSync("git ls-files").toString().split("\n").filter(Boolean);
             const issueText = `${process.env.ISSUE_TITLE} ${process.env.ISSUE_BODY}`.toLowerCase();
 
             const selectedFiles = new Set();
 
-            // 2. Check for explicitly mentioned filenames (e.g. package.json, vite.config.ts)
+            // 1. First priority: Any filename explicitly mentioned in the issue
             for (const f of allFiles) {
               const filename = f.split("/").pop();
               if (filename && issueText.includes(filename.toLowerCase())) {
@@ -65,9 +64,9 @@ jobs:
               }
             }
 
-            // 3. Fill up to 10 files with core React components in src/
+            // 2. Second priority: Fill up to 3 total files with React components in src/
             for (const f of allFiles) {
-              if (selectedFiles.size >= 10) break;
+              if (selectedFiles.size >= 3) break;
               if (f.startsWith("src/") && (f.endsWith(".tsx") || f.endsWith(".ts"))) {
                 selectedFiles.add(f);
               }
@@ -97,7 +96,7 @@ jobs:
               "src/App.tsx": "updated content..."
             }`;
 
-            console.log("Sending task to Gemini API with smart file context...");
+            console.log("Sending task to Gemini API (3-file mode)...");
 
             let attempts = 0;
             let response;
@@ -105,7 +104,7 @@ jobs:
               try {
                 attempts++;
                 response = await ai.models.generateContent({
-                  model: "gemini-2.5-flash",
+                  model: "gemini-3.6-flash",
                   contents: prompt
                 });
                 break;
