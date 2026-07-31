@@ -51,12 +51,12 @@ jobs:
 
             const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
             
-            // Focus strictly on React source files inside src/ to keep input tokens tiny
+            // Focus on key React source files inside src/
             const files = execSync("git ls-files").toString().split("\n")
-              .filter(f => f.startsWith("src/") && (f.endsWith(".tsx") || f.endsWith(".ts") || f.endsWith(".jsx") || f.endsWith(".js")));
+              .filter(f => f.startsWith("src/") && (f.endsWith(".tsx") || f.endsWith(".ts")));
 
             let codebase = "";
-            for (const file of files.slice(0, 15)) {
+            for (const file of files.slice(0, 8)) {
               if (fs.existsSync(file)) {
                 codebase += `\n=== FILE: ${file} ===\n` + fs.readFileSync(file, "utf8");
               }
@@ -76,26 +76,25 @@ jobs:
             Do NOT include any text or markdown formatting outside the JSON object.
             Example:
             {
-              "src/components/Header.tsx": "updated content..."
+              "src/App.tsx": "updated content..."
             }`;
 
-            console.log("Sending task to Gemini API...");
+            console.log("Sending task to Gemini API (gemini-1.5-flash)...");
 
-            // Auto-retry if hit by temporary free-tier rate limit
             let attempts = 0;
             let response;
             while (attempts < 3) {
               try {
                 attempts++;
                 response = await ai.models.generateContent({
-                  model: "gemini-2.0-flash",
+                  model: "gemini-1.5-flash",
                   contents: prompt
                 });
                 break;
               } catch (err) {
                 if (err.message && err.message.includes("429") && attempts < 3) {
-                  console.log(`Rate limit hit (429). Waiting 20 seconds before retry ${attempts}/3...`);
-                  await new Promise(r => setTimeout(r, 20000));
+                  console.log(`Rate limit reached (429). Waiting 30 seconds before retry ${attempts}/3...`);
+                  await new Promise(r => setTimeout(r, 30000));
                 } else {
                   throw err;
                 }
