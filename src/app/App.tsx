@@ -63,6 +63,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const [habitSearchQuery, setHabitSearchQuery] = useState('');
+  const [habitFilter, setHabitFilter] = useState<'all' | 'restock' | 'stocked' | 'need_data'>('all');
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
 
   const [hasDismissedReminder, setHasDismissedReminderState] = useState(() => {
@@ -188,15 +189,19 @@ export default function App() {
   };
 
   const handleAddFromHabits = async (habit: any) => {
+    const existingMatch = items.find(item => isDuplicateItem(habit.name, item.name));
+    if (existingMatch) {
+      setToastMessage(`${existingMatch.name} is already in your list`);
+      return;
+    }
     await addDoc(collection(db, 'items'), {
       name: habit.name, 
-      category: habit.category, 
-      store: habit.store,
+      category: habit.category || 'Other', 
+      store: habit.store || habit.lastPurchasedStore || 'Other',
       inCart: false, 
       createdAt: new Date().toISOString()
     });
     setToastMessage(`Added ${habit.name} to List`);
-    setActiveTab('list'); 
   };
   
   const listTabItems = items;
@@ -290,6 +295,21 @@ export default function App() {
     });
   }, [purchaseHistory]);
 
+  const restockCount = useMemo(() => habitsDashboardData.filter(h => h.status === 'Restock Soon').length, [habitsDashboardData]);
+  const stockedCount = useMemo(() => habitsDashboardData.filter(h => h.status === 'Stocked').length, [habitsDashboardData]);
+  const needDataCount = useMemo(() => habitsDashboardData.filter(h => h.status === 'Need Data').length, [habitsDashboardData]);
+
+  const filteredHabits = useMemo(() => {
+    return habitsDashboardData.filter(habit => {
+      const matchesSearch = habit.name.toLowerCase().includes(habitSearchQuery.toLowerCase().trim());
+      if (!matchesSearch) return false;
+      if (habitFilter === 'restock') return habit.status === 'Restock Soon';
+      if (habitFilter === 'stocked') return habit.status === 'Stocked';
+      if (habitFilter === 'need_data') return habit.status === 'Need Data';
+      return true;
+    });
+  }, [habitsDashboardData, habitSearchQuery, habitFilter]);
+
   const suggestedReplenishments = useMemo(() => {
     const itemHistory: Record<string, { itemData: GroceryItem, dates: number[] }> = {};
     
@@ -345,307 +365,9 @@ export default function App() {
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
       
-      {cartTabItems.length > 0 && !hasDismissedReminder && (
+      {cartTabItems.length > 0 && activeTab !== 'cart' && !hasDismissedReminder && (
         <div className="fixed top-4 left-4 right-4 z-50 animate-fade-in">
           <div className="bg-red-50 border-2 border-red-200 rounded-2xl shadow-xl overflow-hidden p-4">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                <span className="material-symbols-outlined text-red-600">shopping_cart_checkout</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="font-headline font-bold text-red-900 text-lg">Unfinished Checkout</h3>
-                <p className="text-red-700 text-sm mt-0.5 leading-tight">
-                  You left {cartTabItems.length} items in your cart.
-                </p>
-                <div className="flex gap-2 mt-3">
-                  <button 
-                    onClick={() => {
-                      setHasDismissedReminder(true);
-                      setActiveTab('cart');
-                    }}
-                    className="flex-1 bg-red-600 text-white font-bold py-2 rounded-xl text-sm active:scale-95 transition-transform"
-                  >
-                    View Cart
-                  </button>
-                  <button 
-                    onClick={() => setHasDismissedReminder(true)}
-                    className="flex-1 bg-red-100 text-red-800 font-bold py-2 rounded-xl text-sm active:scale-95 transition-transform"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="w-full flex flex-col gap-6 pb-20 mt-4">
-        
-        {activeTab === 'list' && (
-          <>
-            <AddForm onAddItem={handleAddItem} />
-
-            {suggestedReplenishments.length > 0 && (
-              <div className="mb-6 p-4 bg-white/50 backdrop-blur-md border border-primary/10 rounded-2xl shadow-[0_4px_20px_-4px_rgba(23,106,33,0.05)]">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="material-symbols-outlined text-primary text-xl">auto_awesome</span>
-                  <h3 className="font-headline font-bold text-slate-800 tracking-tight">You might be running out of:</h3>
-                </div>
-                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                  {suggestedReplenishments.map(item => (
-                    <div 
-                      key={`suggest-${item.name}`}
-                      className="flex items-center bg-transparent rounded-full border border-primary/20 hover:border-primary/50 hover:bg-primary/5 transition-all"
-                    >
-                      <button 
-                        onClick={() => handleAddFromHabits(item)}
-                        className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-slate-700 whitespace-nowrap"
-                      >
-                        <Icon icon={getItemIcon(item.name)} className="text-lg" />
-                        {item.name}
-                        <span className="material-symbols-outlined text-[14px] text-primary/60 ml-0.5">add_circle</span>
-                      </button>
-                      <button 
-                        onClick={() => handleDismissSuggestion(item.name)}
-                        className="pr-3 pl-1 py-2 text-slate-400 hover:text-red-500 transition-colors flex items-center"
-                        aria-label="Dismiss suggestion"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">close</span>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {listTabItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center pt-16 pb-8 text-center px-4 animate-fade-in">
-                <div className="w-24 h-24 bg-surface-container-high rounded-full flex items-center justify-center mb-6">
-                  <span className="material-symbols-outlined text-5xl text-on-surface-variant/40">shopping_cart</span>
-                </div>
-                <h3 className="text-xl font-headline font-bold text-on-surface mb-2">Your list is empty</h3>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {Object.keys(groupedByStore).sort().map((storeName) => {
-                  const itemsInStore = groupedByStore[storeName];
-                  const officialStore = STORE_OPTIONS.find(s => s.name.toLowerCase() === storeName.toLowerCase());
-                  
-                  const storeHeader = officialStore?.imageLogo ? (
-                    <div className="flex items-center px-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm">
-                      <img 
-                        src={officialStore.imageLogo}
-                        alt={storeName} 
-                        className="h-5 sm:h-6 max-w-[100px] sm:max-w-[120px] object-contain object-left" 
-                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      />
-                      <div className="ml-auto bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md flex items-center justify-center">
-                        <span className="text-xs font-bold">{itemsInStore.length}</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className={`flex items-center px-4 py-3 rounded-xl border shadow-sm font-headline font-bold uppercase tracking-wider text-sm ${officialStore?.color || 'bg-white text-slate-600 border-slate-200'}`}>
-                      {officialStore?.logo || storeName}
-                      <div className="ml-auto bg-black/5 px-2.5 py-1 rounded-md flex items-center justify-center">
-                        <span className="text-xs font-bold">{itemsInStore.length}</span>
-                      </div>
-                    </div>
-                  );
-                  const categoryOrder = CATEGORIES.reduce((acc, cat, index) => {
-                    acc[cat.name] = index;
-                    return acc;
-                  }, {} as Record<string, number>);
-                  const sortedItems = [...itemsInStore].sort((a, b) => {
-                    const orderA = categoryOrder[a.category || ''] ?? 99;
-                    const orderB = categoryOrder[b.category || ''] ?? 99;
-                    return orderA - orderB;
-                  });
-
-                  return (
-                    <div key={storeName} className="mb-6 flex flex-col gap-3">
-                      {storeHeader}
-                      <div className="flex flex-col gap-2">
-                        {sortedItems.map((item: GroceryItem) => (
-                          <ItemCard 
-                            key={item.id} 
-                            id={item.id} 
-                            name={item.name} 
-                            category={item.category || 'Unknown'} 
-                            inCart={item.inCart} 
-                            viewMode="list" 
-                            onToggleCart={handleToggleCart} 
-                            onDelete={handleDeleteItem} 
-                            onEdit={() => setEditingItem(item)} 
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
-
-        {activeTab === 'cart' && (
-          <div className="flex flex-col gap-3 mt-2">
-            <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">Ready for Checkout</h2>
-            {cartTabItems.map((item: GroceryItem) => (
-              <ItemCard 
-                key={item.id} 
-                id={item.id} 
-                name={item.name} 
-                category={item.category || 'Unknown'} 
-                inCart={item.inCart} 
-                viewMode="cart" 
-                onToggleCart={handleToggleCart} 
-                onDelete={handleDeleteItem} 
-              />
-            ))}
-            <button 
-              onClick={handleCompletePurchase}
-              className="mt-6 w-full bg-[#d3e3d8] text-[#174525] font-headline font-bold py-4 rounded-xl shadow-sm border border-[#b8d0c0] hover:bg-[#c2d6cb] transition-all flex justify-center items-center gap-2 active:scale-95"
-            >
-              <span className="material-symbols-outlined text-xl">check_circle</span>
-              Complete Purchase
-            </button>
-          </div>
-        )}
-
-        {/* UPDATED HABITS TAB */}
-        {activeTab === 'habits' && (
-          <div className="w-full flex flex-col gap-8 pb-24 animate-fade-in">
-            <section>
-              <div className="flex flex-col gap-4 mb-6">
-                <h2 className="text-xl font-headline font-bold text-on-surface">Habits Dashboard</h2>
-                
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
-                  <input 
-                    type="text"
-                    placeholder="Find item history..."
-                    value={habitSearchQuery}
-                    onChange={(e) => setHabitSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow"
-                  />
-                  {habitSearchQuery && (
-                    <button 
-                      onClick={() => setHabitSearchQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      <span className="material-symbols-outlined text-sm">close</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                {habitsDashboardData
-                  .filter(habit => habit.name.toLowerCase().includes(habitSearchQuery.toLowerCase().trim()))
-                  .map((habit, index) => (
-                    <div key={`${habit.id}-${index}`} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-                      <div className="flex justify-between items-center mb-5">
-                        <h3 className="font-bold text-slate-800 capitalize">{habit.name}</h3>
-                        
-                        {/* INJECTED INTERACTIVE BUTTON */}
-                        <button 
-                          onClick={() => {
-                            const isAlreadyOnList = listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase());
-                            if (!isAlreadyOnList) {
-                              handleAddFromHabits(habit); 
-                            }
-                          }}
-                          disabled={listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase())}
-                          className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-md transition-all active:scale-95 ${
-                            listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase())
-                              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                              : habit.status === 'Restock Soon' 
-                                ? 'bg-red-100 text-red-700 hover:bg-red-200 shadow-sm' 
-                                : habit.status === 'Need Data'
-                                  ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 shadow-sm'
-                                  : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 shadow-sm'
-                          }`}
-                          aria-label={`Add ${habit.name} to list`}
-                        >
-                          {listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase()) 
-                            ? 'Added to List' 
-                            : habit.status}
-                          
-                          {listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase()) ? (
-                            <span className="material-symbols-outlined text-[16px] font-bold">check</span>
-                          ) : (
-                            <span className="material-symbols-outlined text-[16px] font-bold">add</span>
-                          )}
-                        </button>
-                      </div>
-                      
-                      <div className="grid grid-cols-3 gap-2 text-sm text-slate-600 mb-3">
-                        <div>
-                          <span className="block text-xs text-slate-400">Purchases</span>
-                          <span className="font-medium">{habit.totalPurchases}</span>
-                        </div>
-                        <div>
-                          <span className="block text-xs text-slate-400">Avg Cycle</span>
-                          <span className="font-medium">{habit.avgIntervalDays ? `${habit.avgIntervalDays}d` : '--'}</span>
-                        </div>
-                        <div>
-                          <span className="block text-xs text-slate-400">Last Bought</span>
-                          <span className="font-medium">{habit.daysSinceLast !== null ? `${habit.daysSinceLast}d ago` : '--'}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 pt-3 border-t border-slate-100 mt-2">
-                        <span className="text-xs text-slate-400">Last bought from:</span>
-                        <span className="text-xs font-medium text-slate-700 capitalize">
-                          {habit.lastPurchasedStore}
-                        </span>
-                      </div>
-                      
-                      <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full transition-all ${
-                            habit.status === 'Restock Soon' ? 'bg-red-500' : 
-                            habit.status === 'Need Data' ? 'bg-amber-400' : 
-                            'bg-emerald-500'
-                          }`}
-                          style={{ width: `${habit.progressPercent}%` }}
-                        />
-                      </div>
-                    </div>
-                ))}
-                
-                {habitsDashboardData.length === 0 && (
-                  <p className="text-sm text-on-surface-variant text-center py-8">Complete a purchase to generate habit data.</p>
-                )}
-                
-                {habitsDashboardData.length > 0 && 
-                 habitSearchQuery && 
-                 habitsDashboardData.filter(h => h.name.toLowerCase().includes(habitSearchQuery.toLowerCase().trim())).length === 0 && (
-                  <p className="text-sm text-slate-500 text-center py-8 bg-white border border-slate-200 rounded-xl shadow-sm">
-                    No purchase history found for "{habitSearchQuery}"
-                  </p>
-                )}
-              </div>
-            </section>
-          </div>
-        )}
-      </div>
-
-      {editingItem && (
-        <EditModal 
-          item={editingItem} 
-          onClose={() => setEditingItem(null)} 
-          onSave={handleUpdateItem} 
-          onForget={handleForgetPreference}
-        />
-      )}
-
-      <Toast 
-        message={toastMessage || ''} 
-        isVisible={!!toastMessage} 
-        onClose={() => setToastMessage(null)} 
-      />
-    </Layout>
-  );
-}
+                <span className=
