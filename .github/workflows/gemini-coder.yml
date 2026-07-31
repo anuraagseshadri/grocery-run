@@ -51,11 +51,12 @@ jobs:
 
             const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
             
+            // Focus strictly on React source files inside src/ to keep input tokens tiny
             const files = execSync("git ls-files").toString().split("\n")
-              .filter(f => f.endsWith(".tsx") || f.endsWith(".ts") || f.endsWith(".js") || f.endsWith(".jsx") || f.endsWith(".json"));
+              .filter(f => f.startsWith("src/") && (f.endsWith(".tsx") || f.endsWith(".ts") || f.endsWith(".jsx") || f.endsWith(".js")));
 
             let codebase = "";
-            for (const file of files.slice(0, 25)) {
+            for (const file of files.slice(0, 15)) {
               if (fs.existsSync(file)) {
                 codebase += `\n=== FILE: ${file} ===\n` + fs.readFileSync(file, "utf8");
               }
@@ -79,10 +80,27 @@ jobs:
             }`;
 
             console.log("Sending task to Gemini API...");
-            const response = await ai.models.generateContent({
-              model: "gemini-2.5-flash",
-              contents: prompt
-            });
+
+            // Auto-retry if hit by temporary free-tier rate limit
+            let attempts = 0;
+            let response;
+            while (attempts < 3) {
+              try {
+                attempts++;
+                response = await ai.models.generateContent({
+                  model: "gemini-2.0-flash",
+                  contents: prompt
+                });
+                break;
+              } catch (err) {
+                if (err.message && err.message.includes("429") && attempts < 3) {
+                  console.log(`Rate limit hit (429). Waiting 20 seconds before retry ${attempts}/3...`);
+                  await new Promise(r => setTimeout(r, 20000));
+                } else {
+                  throw err;
+                }
+              }
+            }
 
             let cleanJson = response.text.trim();
             if (cleanJson.includes("{")) {
