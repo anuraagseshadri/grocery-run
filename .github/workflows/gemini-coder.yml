@@ -40,7 +40,7 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body || github.event.comment.body }}
         run: |
           node -e '
-          const { GoogleGenAI } = require("@google/genai");
+          const { GoogleGenAI, Type } = require("@google/genai");
           const fs = require("fs");
           const { execSync } = require("child_process");
 
@@ -89,15 +89,9 @@ jobs:
 
             Instructions:
             Implement the requested UI, content, or bug fix.
-            Return ONLY a valid, strictly escaped JSON object mapping relative file paths to their full updated file contents.
-            Use \\n for all newlines inside string values.
-            Do NOT include any text or markdown formatting outside the JSON object.
-            Example:
-            {
-              "src/App.tsx": "import React from \\"react\\";\\nexport default function App() { return <div>App</div>; }"
-            }`;
+            Return the updated file paths and their complete modified contents.`;
 
-            console.log("Sending task to Gemini API (3-file mode)...");
+            console.log("Sending task to Gemini API with Structured Output Schema...");
 
             let attempts = 0;
             let response;
@@ -107,7 +101,26 @@ jobs:
                 response = await ai.models.generateContent({
                   model: "gemini-3.6-flash",
                   contents: prompt,
-                  config: { responseMimeType: "application/json" }
+                  config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                      type: Type.OBJECT,
+                      properties: {
+                        files: {
+                          type: Type.ARRAY,
+                          items: {
+                            type: Type.OBJECT,
+                            properties: {
+                              path: { type: Type.STRING },
+                              content: { type: Type.STRING }
+                            },
+                            required: ["path", "content"]
+                          }
+                        }
+                      },
+                      required: ["files"]
+                    }
+                  }
                 });
                 break;
               } catch (err) {
@@ -120,29 +133,10 @@ jobs:
               }
             }
 
-            let rawText = response.text.trim();
-            if (rawText.includes("{")) {
-              rawText = rawText.substring(rawText.indexOf("{"), rawText.lastIndexOf("}") + 1);
-            }
-
-            // Robust JSON parser handling unescaped control characters/newlines
-            let updates;
-            try {
-              updates = JSON.parse(rawText);
-            } catch (e) {
-              console.log("Standard JSON.parse failed, sanitizing control characters...");
-              const sanitized = rawText.replace(/[\u0000-\u001F\u007F-\u009F]/g, (c) => {
-                if (c === "\n") return "\\n";
-                if (c === "\r") return "\\r";
-                if (c === "\t") return "\\t";
-                return "";
-              });
-              updates = JSON.parse(sanitized);
-            }
-
-            for (const [filePath, fileContent] of Object.entries(updates)) {
-              fs.writeFileSync(filePath, fileContent, "utf8");
-              console.log("Successfully updated file:", filePath);
+            const parsed = JSON.parse(response.text.trim());
+            for (const file of parsed.files) {
+              fs.writeFileSync(file.path, file.content, "utf8");
+              console.log("Successfully updated file:", file.path);
             }
           }
 
