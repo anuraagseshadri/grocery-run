@@ -1,19 +1,14 @@
-import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore"; // Ensure this is here!
+import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
 
-// Only change the values inside the quotes below
 const firebaseConfig = {
-  apiKey: "AIzaSyCVj9HCuKZu93eW5jouIVlFGkaYMV3S5hw",
-  authDomain: "grocery-run-d7a44.firebaseapp.com",
-  projectId: "grocery-run-d7a44",
-  storageBucket: "grocery-run-d7a44.firebasestorage.app",
-  messagingSenderId: "908830901831",
-  appId: "1:908830901831:web:2f37e55cb2bc2a2a695362",
-  measurementId: "G-E2T288T4LL"
+  apiKey: import.meta.env?.VITE_FIREBASE_API_KEY || 'AIzaSyDummyApiKeyForDev1234567890',
+  authDomain: import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN || 'grocery-app.firebaseapp.com',
+  projectId: import.meta.env?.VITE_FIREBASE_PROJECT_ID || 'grocery-app-default',
+  storageBucket: import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET || 'grocery-app.appspot.com',
+  messagingSenderId: import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID || '123456789012',
+  appId: import.meta.env?.VITE_FIREBASE_APP_ID || '1:123456789012:web:abcdef1234567890'
 };
 
-// Initialize the Firebase App
 const app = initializeApp(firebaseConfig);
-
-// Initialize Cloud Firestore and export it so the rest of the app can use it
-export const db = getFirestore(app); // This is the line your app was looking for!
+export const db = getFirestore(app);
