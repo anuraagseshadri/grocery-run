@@ -89,9 +89,10 @@ jobs:
 
             Instructions:
             Implement the requested UI, content, or bug fix.
+            IMPORTANT: Write complete, fully valid code files. Do NOT truncate or cut off code mid-line.
             Return the updated file paths and their complete modified contents.`;
 
-            console.log("Sending task to Gemini API (6-file context)...");
+            console.log("Sending task to Gemini API (8192 max tokens)...");
 
             let attempts = 0;
             let response;
@@ -102,6 +103,7 @@ jobs:
                   model: "gemini-3.6-flash",
                   contents: prompt,
                   config: {
+                    maxOutputTokens: 8192,
                     responseMimeType: "application/json",
                     responseSchema: {
                       type: Type.OBJECT,
