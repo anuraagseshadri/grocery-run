@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Auth } from '../components/Auth';
 import { Layout } from '../components/Layout';
 import { AddForm } from '../components/AddForm';
 import { ItemCard } from '../components/ItemCard';
@@ -7,11 +8,12 @@ import { Toast } from '../components/Toast';
 import { autoTagItem } from '../tagger';
 import { STORE_OPTIONS, getItemIcon, CATEGORIES } from '../constants';
 import { Icon } from '@iconify/react';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { 
   collection, onSnapshot, addDoc, doc, updateDoc, 
-  deleteDoc, getDoc, setDoc 
+  deleteDoc, getDoc, setDoc, query, where 
 } from 'firebase/firestore';
+import { onAuthStateChanged, User } from 'firebase/auth';
 
 interface GroceryItem {
   id: string;
@@ -20,6 +22,7 @@ interface GroceryItem {
   store: string;
   inCart: boolean;
   createdAt?: string;
+  userId?: string;
 }
 
 const isDuplicateItem = (newItem: string, existingItem: string) => {
@@ -56,6 +59,8 @@ const DEFAULT_VELOCITY: Record<string, number> = {
 };
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('list');
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
@@ -86,24 +91,49 @@ export default function App() {
     });
   };
 
+  // Listen for auth state changes
   useEffect(() => {
-    const unsubscribeItems = onSnapshot(collection(db, 'items'), (snapshot) => {
-      const liveItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroceryItem));
-      setItems(liveItems);
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
     });
 
-    const unsubscribeHistory = onSnapshot(collection(db, 'purchaseHistory'), (snapshot) => {
-      const liveHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPurchaseHistory(liveHistory);
-    });
+    return () => unsubscribeAuth();
+  }, []);
+
+  // Listen to user's items only when logged in
+  useEffect(() => {
+    if (!user) {
+      setItems([]);
+      setPurchaseHistory([]);
+      return;
+    }
+
+    const unsubscribeItems = onSnapshot(
+      query(collection(db, 'items'), where('userId', '==', user.uid)),
+      (snapshot) => {
+        const liveItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroceryItem));
+        setItems(liveItems);
+      }
+    );
+
+    const unsubscribeHistory = onSnapshot(
+      query(collection(db, 'purchaseHistory'), where('userId', '==', user.uid)),
+      (snapshot) => {
+        const liveHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setPurchaseHistory(liveHistory);
+      }
+    );
 
     return () => {
       unsubscribeItems();
       unsubscribeHistory();
     };
-  }, []);
+  }, [user]);
 
   const handleAddItem = async (newItemName: string) => {
+    if (!user) return;
+    
     const nameKey = newItemName.toLowerCase().trim();
     const existingMatch = items.find(item => isDuplicateItem(newItemName, item.name));
 
@@ -128,6 +158,7 @@ export default function App() {
         category: learnedCat || autoCat, 
         store,
         inCart: false, 
+        userId: user.uid,
         createdAt: new Date().toISOString()
       });
     } catch (error) {
@@ -165,11 +196,14 @@ export default function App() {
   };
 
   const handleCompletePurchase = async () => {
+    if (!user) return;
+    
     const cartItems = items.filter(item => item.inCart);
     const checkoutTime = new Date().toISOString();
 
     await addDoc(collection(db, 'purchaseHistory'), {
       date: checkoutTime,
+      userId: user.uid,
       items: cartItems
     });
 
@@ -188,10 +222,13 @@ export default function App() {
   };
 
   const handleAddFromHabits = async (habit: any) => {
+    if (!user) return;
+    
     await addDoc(collection(db, 'items'), {
       name: habit.name, 
       category: habit.category, 
       store: habit.store,
+      userId: user.uid,
       inCart: false, 
       createdAt: new Date().toISOString()
     });
@@ -342,8 +379,26 @@ export default function App() {
     return suggestions;
   }, [purchaseHistory, items, dismissedSuggestions]);
 
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f2f9ea]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#176a21] mx-auto"></div>
+          <p className="mt-4 text-[#176a21] font-medium">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login if not authenticated
+  if (!user) {
+    return <Auth />;
+  }
+
+  // Show main app if authenticated
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
+    <Layout activeTab={activeTab} setActiveTab={setActiveTab} userEmail={user.email}>
       
       {cartTabItems.length > 0 && !hasDismissedReminder && (
         <div className="fixed top-4 left-4 right-4 z-50 animate-fade-in">
