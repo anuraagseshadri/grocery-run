@@ -1,356 +1,651 @@
-import { AddItemForm } from '../components/AddItemForm';
-import { Auth } from '../components/Auth';
-import { BackupRestore } from '../components/BackupRestore';
-import { supabase } from '../utils/supabaseClient';
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { Layout } from '../components/Layout';
+import { AddForm } from '../components/AddForm';
+import { ItemCard } from '../components/ItemCard';
+import { EditModal } from '../components/EditModal';
+import { Toast } from '../components/Toast';
+import { autoTagItem } from '../tagger';
+import { STORE_OPTIONS, getItemIcon, CATEGORIES } from '../constants';
+import { Icon } from '@iconify/react';
+import { db } from '../firebase';
 import { 
-  Package, CheckCheck, RefreshCcw, BarChart3, 
-  Trash2, Plus, Sparkles, Moon, Sun, LogOut, Loader2,
-  ListOrdered, History, ShoppingCart, X
-} from 'lucide-react';
-import { toast, Toaster } from 'sonner';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
-import { GroceryItem } from './types';
+  collection, onSnapshot, addDoc, doc, updateDoc, 
+  deleteDoc, getDoc, setDoc 
+} from 'firebase/firestore';
 
-// --- HELPERS (Categories & Emojis) ---
-const EMOJI_MAP: Record<string, string> = {
-  onion: "🧅", tomato: "🍅", milk: "🥛", bread: "🍞", chicken: "🍗", eggs: "🥚", apple: "🍎", banana: "🍌", 
-  diaper: "🧷", formula: "🍼", wipe: "🧻", coffee: "☕", water: "💧", beer: "🍺"
-};
+interface GroceryItem {
+  id: string;
+  name: string;
+  category: string;
+  store: string;
+  inCart: boolean;
+  createdAt?: string;
+}
 
-const getAutoCategory = (name: string): string => {
-  const lower = name.toLowerCase();
-  const categoryKeywords: Record<string, string[]> = {
-    "🥬 Produce": ["onion", "tomato", "potato", "apple", "banana", "spinach", "lettuce", "garlic", "fruit", "veg"],
-    "🥛 Dairy & Eggs": ["milk", "cheese", "egg", "butter", "yogurt", "cream", "paneer"],
-    "🥩 Meat & Seafood": ["chicken", "beef", "pork", "fish", "salmon", "bacon", "meat"],
-    "🍞 Bakery": ["bread", "bun", "bagel", "muffin", "cake", "pita", "tortilla"],
-    "👶 Baby": ["diaper", "wipe", "formula", "baby food", "pacifier", "soother"],
-    "🧼 Household": ["paper towel", "toilet paper", "soap", "detergent", "clean", "foil", "trash"],
-    "🥫 Pantry": ["rice", "dal", "flour", "sugar", "salt", "spice", "oil", "ghee", "cereal", "oat", "honey"]
-  };
-  for (const [category, keywords] of Object.entries(categoryKeywords)) {
-    if (keywords.some(keyword => lower.includes(keyword))) return category;
+const isDuplicateItem = (newItem: string, existingItem: string) => {
+  const a = newItem.trim().toLowerCase();
+  const b = existingItem.trim().toLowerCase();
+
+  if (a === b) return true;
+  if (a + 's' === b || b + 's' === a) return true;
+  if (a + 'es' === b || b + 'es' === a) return true;
+  if (a.replace(/y$/, 'ies') === b || b.replace(/y$/, 'ies') === a) return true;
+
+  const synonyms = [
+    ['coriander', 'cilantro'],
+    ['eggplant', 'aubergine'],
+    ['zucchini', 'courgette'],
+    ['scallion', 'green onion']
+  ];
+
+  for (const group of synonyms) {
+    if (group.includes(a) && group.includes(b)) return true;
   }
-  return "📦 Other";
+  return false;
 };
 
-const GROCERY_CATEGORIES = ["🥬 Produce", "🥛 Dairy & Eggs", "🥩 Meat & Seafood", "🍞 Bakery", "🍝 Pasta & Grains", "🥜 Nuts & Seeds", "🥫 Pantry", "❄️ Frozen Foods", "🍿 Snacks & Candy", "🥤 Beverages & Coffee", "🧼 Household & Cleaning", "🧴 Personal & Pet Care", "💊 Health & Pharmacy", "👶 Baby", "📦 Other"];
-const PRESET_STORES = ["Costco", "FreshCo", "No Frills", "Walmart", "SDM", "Other"];
-
-const normalizeName = (name: string) => name.toLowerCase().replace(/[^\w\s]/gi, "").trim();
-
-const getTimeAgo = (dateString: string | undefined) => {
-  if (!dateString) return "First purchase";
-  const diffDays = Math.floor((new Date().getTime() - new Date(dateString).getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  return `${diffDays}d ago`;
+const DEFAULT_VELOCITY: Record<string, number> = {
+  'milk': 7,
+  'eggs': 14,
+  'bread': 7,
+  'bananas': 5,
+  'coffee': 30,
+  'olive oil': 60,
+  'paper towels': 30,
+  'laundry detergent': 45
 };
 
-// --- MAIN APPLICATION ---
 export default function App() {
-  const [session, setSession] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState('list');
   const [items, setItems] = useState<GroceryItem[]>([]);
-  const [darkMode, setDarkMode] = useState(false);
-  const [animatingId, setAnimatingId] = useState<string | null>(null);
-  const [isMigrating, setIsMigrating] = useState(false);
+  const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
+  const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // 1. Auth & Session Watcher
+  const [habitSearchQuery, setHabitSearchQuery] = useState('');
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
+
+  const [hasDismissedReminder, setHasDismissedReminderState] = useState(() => {
+    return sessionStorage.getItem('cartReminderDismissed') === 'true';
+  });
+
+  const setHasDismissedReminder = (value: boolean) => {
+    setHasDismissedReminderState(value);
+    if (value) {
+      sessionStorage.setItem('cartReminderDismissed', 'true');
+    } else {
+      sessionStorage.removeItem('cartReminderDismissed');
+    }
+  };
+
+  const handleDismissSuggestion = (itemName: string) => {
+    setDismissedSuggestions(prev => {
+      const newSet = new Set(prev);
+      newSet.add(itemName.toLowerCase());
+      return newSet;
+    });
+  };
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
-    return () => subscription.unsubscribe();
+    const unsubscribeItems = onSnapshot(collection(db, 'items'), (snapshot) => {
+      const liveItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroceryItem));
+      setItems(liveItems);
+    });
+
+    const unsubscribeHistory = onSnapshot(collection(db, 'purchaseHistory'), (snapshot) => {
+      const liveHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPurchaseHistory(liveHistory);
+    });
+
+    return () => {
+      unsubscribeItems();
+      unsubscribeHistory();
+    };
   }, []);
 
-  // 2. Fetch Data from Cloud
-  useEffect(() => {
-    const fetchItems = async () => {
-      if (!session?.user) return;
-      const { data, error } = await supabase
-        .from('grocery_items')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false });
-      if (data) setItems(data);
-      if (error) toast.error("Cloud fetch failed");
-    };
-    fetchItems();
-  }, [session]);
+  const handleAddItem = async (newItemName: string) => {
+    const nameKey = newItemName.toLowerCase().trim();
+    const existingMatch = items.find(item => isDuplicateItem(newItemName, item.name));
 
-  // 3. Predictive Suggestion Engine
-  const suggestions = useMemo(() => {
-    const today = new Date().getTime();
-    
-    return items.filter(item => {
-      if (!item.is_history || (item.purchase_dates || []).length < 2) return false;
-
-      if (item.dismissed_at) {
-        const dismissTime = new Date(item.dismissed_at).getTime();
-        const daysSinceDismiss = (today - dismissTime) / (1000 * 60 * 60 * 24);
-        if (daysSinceDismiss < 7) return false; 
-      }
-
-      const dates = item.purchase_dates!.map(d => new Date(d).getTime()).sort((a, b) => a - b);
-      const avgIntervalDays = ((dates[dates.length - 1] - dates[0]) / (dates.length - 1)) / (1000 * 60 * 60 * 24);
-      const daysSinceLastPurchase = (today - dates[dates.length - 1]) / (1000 * 60 * 60 * 24);
-      
-      return daysSinceLastPurchase >= avgIntervalDays;
-    }).slice(0, 5); 
-  }, [items]);
-
-  // --- ACTIONS & HANDLERS ---
-
-  const migrateLocalToCloud = async () => {
-    const localData = localStorage.getItem('groceryItems');
-    if (!localData || !session?.user) return;
-    
-    setIsMigrating(true);
-    const localItems = JSON.parse(localData);
-    
-    const formatted = localItems.map((i: any) => ({
-      name: i.name,
-      category: i.category || "📦 Other",
-      store: i.store || "",
-      purchase_count: i.purchaseCount || i.purchase_count || 0,
-      purchase_dates: i.purchaseDates || i.purchase_dates || [],
-      is_history: i.isHistory || i.is_history || false,
-      checked_out: i.checkedOut || i.checked_out || false,
-      user_id: session.user.id
-    }));
-
-    const { error } = await supabase.from('grocery_items').insert(formatted);
-    if (!error) {
-      toast.success("Successfully migrated to Cloud!");
-      localStorage.removeItem('groceryItems');
-      window.location.reload(); 
-    } else {
-      toast.error("Migration failed");
+    if (existingMatch) {
+      setToastMessage(`${existingMatch.name} is already in your list`);
+      return; 
     }
-    setIsMigrating(false);
-  };
 
-  const handleAddItem = async (name: string, manualCategory?: string, manualStore?: string) => {
-    if (!name.trim() || !session?.user) return;
-    
-    const normName = normalizeName(name);
-    const finalEmoji = EMOJI_MAP[normName] || "";
-    const displayName = finalEmoji ? `${name} ${finalEmoji}` : name;
-
-    const { data, error } = await supabase.from('grocery_items').insert([{
-      name: displayName,
-      category: manualCategory || getAutoCategory(name),
-      store: manualStore || "",
-      user_id: session.user.id
-    }]).select();
-
-    if (data) setItems(prev => [data[0], ...prev]);
-  };
-
-  const handleAddWithSparkle = async (name: string, id: string | number) => {
-    setAnimatingId(id.toString());
-    const cleanName = name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim();
-    await handleAddItem(cleanName);
-    setTimeout(() => setAnimatingId(null), 800);
-  };
-
-  const handleCheckout = async (id: string | number) => {
-    const item = items.find(i => i.id === id);
-    if (!item) return;
-
-    const { error } = await supabase.from('grocery_items').update({ 
-      checked_out: true, 
-      purchase_count: (item.purchase_count || 0) + 1,
-      purchase_dates: [...(item.purchase_dates || []), new Date().toISOString()]
-    }).eq('id', id);
-
-    if (!error) setItems(prev => prev.map(i => i.id === id ? { ...i, checked_out: true } : i));
-  };
-  
-  const handleDelete = async (id: string | number) => {
-    const { error } = await supabase.from('grocery_items').delete().eq('id', id);
-    if (!error) setItems(prev => prev.filter(i => i.id !== id));
-  };
-
-  const handleDismiss = async (id: string | number, e: React.MouseEvent) => {
-    e.stopPropagation(); 
-    
-    const now = new Date().toISOString();
-    
-    setItems(prev => prev.map(i => i.id === id ? { ...i, dismissed_at: now } : i));
-
-    const { error } = await supabase
-      .from('grocery_items')
-      .update({ dismissed_at: now })
-      .eq('id', id);
-
-    if (error) {
-      toast.error("Failed to dismiss item.");
-    } else {
-      toast.success("Snoozed for 7 days.");
+    let learnedCat = null;
+    try {
+      const prefRef = doc(db, 'preferences', nameKey);
+      const prefSnap = await getDoc(prefRef);
+      learnedCat = prefSnap.exists() ? prefSnap.data().category : null;
+    } catch (error) {
+      console.warn("Database read failed. Defaulting to auto-tagger.");
     }
-  };
-  
-  const handleCompleteTrip = async () => {
-    const checkedItems = items.filter(i => i.checked_out && !i.is_history);
-    if (checkedItems.length === 0) return;
-
-    const updates = checkedItems.map(i => ({ ...i, checked_out: false, is_history: true }));
-    const { error } = await supabase.from('grocery_items').upsert(updates);
     
-    if (!error) {
-      setItems(prev => prev.map(i => i.checked_out ? { ...i, checked_out: false, is_history: true } : i));
-      toast.success("Trip completed! Items moved to History.");
+    const { category: autoCat, store } = autoTagItem(newItemName);
+    try {
+      await addDoc(collection(db, 'items'), {
+        name: newItemName.trim(),
+        category: learnedCat || autoCat, 
+        store,
+        inCart: false, 
+        createdAt: new Date().toISOString()
+      });
+    } catch (error) {
+      setToastMessage("Failed to add item. Check network connection or database permissions.");
     }
   };
 
-  // --- UI GROUPING ---
-  const activeItems = items.filter(i => !i.is_history && !i.checked_out);
-  const cartItems = items.filter(i => i.checked_out && !i.is_history);
-  const historyItems = items.filter(i => i.is_history);
+  const handleToggleCart = async (id: string, currentState: boolean) => {
+    await updateDoc(doc(db, 'items', id), { inCart: !currentState });
+    setToastMessage(!currentState ? "Moved to Cart" : "Moved back to List");
+    setHasDismissedReminder(true);
+  };
+
+  const handleDeleteItem = async (id: string) => {
+    await deleteDoc(doc(db, 'items', id));
+  };
+
+  const handleUpdateItem = async (id: string, updates: Partial<GroceryItem>) => {
+    if (updates.category && updates.name) {
+      const nameKey = updates.name.toLowerCase().trim();
+      await setDoc(doc(db, 'preferences', nameKey), {
+        category: updates.category,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    }
+    await updateDoc(doc(db, 'items', id), updates);
+    setEditingItem(null); 
+  };
+
+  const handleForgetPreference = async (name: string) => {
+    const nameKey = name.toLowerCase().trim();
+    await deleteDoc(doc(db, 'preferences', nameKey));
+    setToastMessage(`Reset default categorization for ${name}`);
+    setEditingItem(null);
+  };
+
+  const handleCompletePurchase = async () => {
+    const cartItems = items.filter(item => item.inCart);
+    const checkoutTime = new Date().toISOString();
+
+    await addDoc(collection(db, 'purchaseHistory'), {
+      date: checkoutTime,
+      items: cartItems
+    });
+
+    for (const item of cartItems) {
+      const nameKey = item.name.toLowerCase().trim();
+      await setDoc(doc(db, 'preferences', nameKey), {
+        lastPurchasedDate: checkoutTime,
+        lastPurchasedStore: item.store || 'Unknown',
+        updatedAt: checkoutTime
+      }, { merge: true });
+      await deleteDoc(doc(db, 'items', item.id));
+    }
+    
+    setHasDismissedReminder(false);
+    setActiveTab('habits');
+  };
+
+  const handleAddFromHabits = async (habit: any) => {
+    await addDoc(collection(db, 'items'), {
+      name: habit.name, 
+      category: habit.category, 
+      store: habit.store,
+      inCart: false, 
+      createdAt: new Date().toISOString()
+    });
+    setToastMessage(`Added ${habit.name} to List`);
+    setActiveTab('list'); 
+  };
   
-  // Reshape the flat array into an object grouped by store
-  const groupedByStore = activeItems.reduce((acc, i) => {
-    const storeName = i.store || "Unassigned";
-    if (!acc[storeName]) acc[storeName] = [];
-    acc[storeName].push(i);
-    return acc;
+  const listTabItems = items;
+  const cartTabItems = items.filter(item => item.inCart);
+
+  const groupedByStore = listTabItems.reduce((groups, item) => {
+    const rawStore = item.store?.trim() || 'Other';
+    const officialStore = STORE_OPTIONS.find(
+      s => s.name.toLowerCase() === rawStore.toLowerCase()
+    );
+    const storeName = officialStore ? officialStore.name : 'Other';
+
+    if (!groups[storeName]) { groups[storeName] = []; }
+    groups[storeName].push(item);
+    return groups;
   }, {} as Record<string, GroceryItem[]>);
 
-  if (!session) return <div className={darkMode ? 'dark' : ''}><Auth /></div>;
+  const habitsDashboardData = useMemo(() => {
+    const itemHistory: Record<string, { itemData: GroceryItem, history: {date: number, store: string}[], count: number }> = {};
+    
+    purchaseHistory.forEach(order => {
+      if (!order.date || !order.items) return;
+      const orderTime = new Date(order.date).getTime();
+
+      order.items.forEach((item: GroceryItem) => {
+        const key = (item.name || '').toLowerCase();
+        if (!itemHistory[key]) {
+          itemHistory[key] = { itemData: item, history: [], count: 0 };
+        }
+        itemHistory[key].history.push({ 
+          date: orderTime, 
+          store: item.store || 'Unknown' 
+        });
+        itemHistory[key].count += 1; 
+      });
+    });
+
+    const now = new Date().getTime();
+    const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+    const dashboard = Object.values(itemHistory).map(record => {
+      let daysSinceLast = null;
+      let status = 'Need Data';
+      let progressPercent = 0;
+      let lastPurchasedStore = 'Unknown';
+      
+      const itemNameKey = record.itemData.name.toLowerCase();
+      let effectiveInterval = DEFAULT_VELOCITY[itemNameKey] || null;
+
+      if (record.history.length >= 2) {
+        const sortedHistory = [...record.history].sort((a, b) => a.date - b.date);
+        let totalIntervalMs = 0;
+        for (let i = 1; i < sortedHistory.length; i++) {
+          totalIntervalMs += (sortedHistory[i].date - sortedHistory[i - 1].date);
+        }
+        effectiveInterval = (totalIntervalMs / (sortedHistory.length - 1)) / MS_PER_DAY;
+      }
+
+      if (record.history.length > 0) {
+        const sortedHistory = [...record.history].sort((a, b) => a.date - b.date);
+        const lastPurchase = sortedHistory[sortedHistory.length - 1];
+        
+        lastPurchasedStore = lastPurchase.store;
+        daysSinceLast = (now - lastPurchase.date) / MS_PER_DAY;
+        
+        if (effectiveInterval) {
+          progressPercent = Math.min((daysSinceLast / effectiveInterval) * 100, 100);
+          if (daysSinceLast >= (effectiveInterval * 0.9)) {
+            status = 'Restock Soon';
+          } else {
+            status = 'Stocked';
+          }
+        }
+      }
+
+      return {
+        ...record.itemData,
+        totalPurchases: record.count,
+        avgIntervalDays: effectiveInterval ? Math.round(effectiveInterval) : null,
+        daysSinceLast: daysSinceLast !== null ? Math.round(daysSinceLast) : null,
+        lastPurchasedStore,
+        status,
+        progressPercent
+      };
+    });
+
+    return dashboard.sort((a, b) => {
+      if (a.status === 'Restock Soon' && b.status !== 'Restock Soon') return -1;
+      if (b.status === 'Restock Soon' && a.status !== 'Restock Soon') return 1;
+      return b.progressPercent - a.progressPercent;
+    });
+  }, [purchaseHistory]);
+
+  const suggestedReplenishments = useMemo(() => {
+    const itemHistory: Record<string, { itemData: GroceryItem, dates: number[] }> = {};
+    
+    purchaseHistory.forEach(order => {
+      if (!order.date || !order.items) return;
+      const orderTime = new Date(order.date).getTime(); 
+      
+      order.items.forEach((item: GroceryItem) => {
+        const key = (item.name || '').toLowerCase();
+        if (!itemHistory[key]) {
+          itemHistory[key] = { itemData: item, dates: [] };
+        }
+        itemHistory[key].dates.push(orderTime);
+      });
+    });
+
+    const now = new Date().getTime();
+    const suggestions: GroceryItem[] = [];
+    const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+    Object.values(itemHistory).forEach(record => {
+      const itemNameKey = record.itemData.name.toLowerCase();
+      
+      if (dismissedSuggestions.has(itemNameKey)) return;
+
+      let effectiveInterval = DEFAULT_VELOCITY[itemNameKey] || null;
+
+      if (record.dates.length >= 2) {
+        const sortedDates = [...record.dates].sort((a, b) => a - b);
+        let totalIntervalMs = 0;
+        for (let i = 1; i < sortedDates.length; i++) {
+          totalIntervalMs += (sortedDates[i] - sortedDates[i - 1]);
+        }
+        const rawIntervalDays = (totalIntervalMs / (sortedDates.length - 1)) / MS_PER_DAY;
+        effectiveInterval = Math.max(rawIntervalDays, 3);
+      }
+
+      if (record.dates.length > 0 && effectiveInterval) {
+        const sortedDates = [...record.dates].sort((a, b) => a - b);
+        const lastPurchaseTime = sortedDates[sortedDates.length - 1];
+        const daysSinceLast = (now - lastPurchaseTime) / MS_PER_DAY;
+        if (daysSinceLast >= (effectiveInterval * 0.9) && daysSinceLast > 2) {
+          const alreadyOnList = items.some(i => i.name.toLowerCase() === record.itemData.name.toLowerCase());
+          if (!alreadyOnList) {
+            suggestions.push(record.itemData);
+          }
+        }
+      }
+    });
+    return suggestions;
+  }, [purchaseHistory, items, dismissedSuggestions]);
 
   return (
-    <div className={`min-h-screen p-4 sm:p-8 transition-colors duration-300 ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-      <Toaster position="top-center" richColors theme={darkMode ? 'dark' : 'light'} />
-      <div className="max-w-4xl mx-auto space-y-6">
-        
-        {/* HEADER */}
-        <header className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-black italic tracking-tighter text-blue-600 truncate">GROCERY RUN</h1>
-            <p className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40">Cloud Sync Enabled</p>
-          </div>
-          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 p-1.5 rounded-full shadow-sm border border-slate-200 dark:border-slate-800">
-            <BackupRestore />
-            <button onClick={() => setDarkMode(!darkMode)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-              {darkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-500" />}
-            </button>
-            <button onClick={() => supabase.auth.signOut()} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full text-slate-400 hover:text-red-500">
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
-        </header>
-
-        {/* MIGRATION BANNER */}
-        {localStorage.getItem('groceryItems') && (
-          <button onClick={migrateLocalToCloud} disabled={isMigrating} className="w-full py-3 bg-amber-50 dark:bg-amber-900/10 border border-dashed border-amber-300 rounded-2xl text-[10px] font-black uppercase tracking-widest text-amber-600 flex items-center justify-center gap-2 animate-pulse">
-            {isMigrating ? <Loader2 className="w-3 h-3 animate-spin" /> : "⚠️ Migrate Local List to Cloud"}
-          </button>
-        )}
-
-        {/* SUGGESTIONS BAR */}
-        {suggestions.length > 0 && (
-          <div className="p-4 rounded-2xl border-2 border-dashed border-blue-200 dark:border-blue-900/30 bg-blue-50/50 dark:bg-blue-900/10">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-3 flex items-center gap-2">
-              <Sparkles className="w-3 h-3" /> Habits Suggest:
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {suggestions.map(item => (
-                <div 
-                  key={item.id} 
-                  className={`flex items-stretch border rounded-full text-xs font-bold transition-all relative shadow-sm overflow-hidden ${animatingId === item.id.toString() ? 'scale-110 border-blue-500 ring-2 ring-blue-200' : 'bg-white dark:bg-slate-900 hover:border-blue-300'}`}
-                >
+    <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
+      
+      {cartTabItems.length > 0 && !hasDismissedReminder && (
+        <div className="fixed top-4 left-4 right-4 z-50 animate-fade-in">
+          <div className="bg-red-50 border-2 border-red-200 rounded-2xl shadow-xl overflow-hidden p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <span className="material-symbols-outlined text-red-600">shopping_cart_checkout</span>
+              </div>
+              <div className="flex-1">
+                <h3 className="font-headline font-bold text-red-900 text-lg">Unfinished Checkout</h3>
+                <p className="text-red-700 text-sm mt-0.5 leading-tight">
+                  You left {cartTabItems.length} items in your cart.
+                </p>
+                <div className="flex gap-2 mt-3">
                   <button 
-                    onClick={() => handleAddWithSparkle(item.name, item.id)} 
-                    className={`px-3 py-1.5 flex items-center hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors ${animatingId === item.id.toString() ? 'bg-blue-500 text-white' : 'text-slate-700 dark:text-slate-200'}`}
+                    onClick={() => {
+                      setHasDismissedReminder(true);
+                      setActiveTab('cart');
+                    }}
+                    className="flex-1 bg-red-600 text-white font-bold py-2 rounded-xl text-sm active:scale-95 transition-transform"
                   >
-                    {item.name} 
-                    {animatingId === item.id.toString() ? <Sparkles className="inline w-3 h-3 ml-1 animate-pulse" /> : <Plus className="inline w-3 h-3 ml-1 text-blue-500" />}
+                    View Cart
                   </button>
-                  
-                  <div className={`w-px ${animatingId === item.id.toString() ? 'bg-blue-400' : 'bg-slate-200 dark:bg-slate-700'}`} />
-                  
                   <button 
-                    onClick={(e) => handleDismiss(item.id, e)}
-                    className={`px-2 flex items-center justify-center transition-colors ${animatingId === item.id.toString() ? 'bg-blue-500 text-blue-200' : 'text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'}`}
-                    aria-label={`Dismiss ${item.name}`}
+                    onClick={() => setHasDismissedReminder(true)}
+                    className="flex-1 bg-red-100 text-red-800 font-bold py-2 rounded-xl text-sm active:scale-95 transition-transform"
                   >
-                    <X className="w-3 h-3" />
+                    Dismiss
                   </button>
                 </div>
-              ))}
+              </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        <AddItemForm onAddItem={handleAddItem} categories={GROCERY_CATEGORIES} stores={PRESET_STORES} />
+      <div className="w-full flex flex-col gap-6 pb-20 mt-4">
+        
+        {activeTab === 'list' && (
+          <>
+            <AddForm onAddItem={handleAddItem} />
 
-        <Tabs defaultValue="active" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-white dark:bg-slate-900 p-1 rounded-2xl border shadow-sm">
-            <TabsTrigger value="active" className="rounded-xl flex gap-2"><ListOrdered className="w-4 h-4" /> List ({activeItems.length})</TabsTrigger>
-            <TabsTrigger value="cart" className="rounded-xl flex gap-2"><ShoppingCart className="w-4 h-4" /> Cart ({cartItems.length})</TabsTrigger>
-            <TabsTrigger value="history" className="rounded-xl flex gap-2"><History className="w-4 h-4" /> Habits</TabsTrigger>
-          </TabsList>
+            {suggestedReplenishments.length > 0 && (
+              <div className="mb-6 p-4 bg-white/50 backdrop-blur-md border border-primary/10 rounded-2xl shadow-[0_4px_20px_-4px_rgba(23,106,33,0.05)]">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="material-symbols-outlined text-primary text-xl">auto_awesome</span>
+                  <h3 className="font-headline font-bold text-slate-800 tracking-tight">You might be running out of:</h3>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                  {suggestedReplenishments.map(item => (
+                    <div 
+                      key={`suggest-${item.name}`}
+                      className="flex items-center bg-transparent rounded-full border border-primary/20 hover:border-primary/50 hover:bg-primary/5 transition-all"
+                    >
+                      <button 
+                        onClick={() => handleAddFromHabits(item)}
+                        className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-slate-700 whitespace-nowrap"
+                      >
+                        <Icon icon={getItemIcon(item.name)} className="text-lg" />
+                        {item.name}
+                        <span className="material-symbols-outlined text-[14px] text-primary/60 ml-0.5">add_circle</span>
+                      </button>
+                      <button 
+                        onClick={() => handleDismissSuggestion(item.name)}
+                        className="pr-3 pl-1 py-2 text-slate-400 hover:text-red-500 transition-colors flex items-center"
+                        aria-label="Dismiss suggestion"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">close</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-          <TabsContent value="active" className="mt-6 space-y-6">
-            {Object.keys(groupedByStore).sort().map(storeName => (
-              <div key={storeName} className="space-y-3">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">
-                  {storeName} ({groupedByStore[storeName].length})
-                </h3>
-                {groupedByStore[storeName].map(item => (
-                  <div key={item.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border rounded-2xl shadow-sm group">
-                    <div className="flex items-center gap-4">
-                      <button onClick={() => handleCheckout(item.id)} className="w-6 h-6 rounded-full border-2 border-blue-100 hover:border-blue-500 transition-colors" />
-                      <div>
-                        <p className="text-sm font-bold">{item.name}</p>
-                        {/* Display category badge here instead of store name */}
-                        <p className="text-[9px] font-black uppercase opacity-40">{item.category}</p>
+            {listTabItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center pt-16 pb-8 text-center px-4 animate-fade-in">
+                <div className="w-24 h-24 bg-surface-container-high rounded-full flex items-center justify-center mb-6">
+                  <span className="material-symbols-outlined text-5xl text-on-surface-variant/40">shopping_cart</span>
+                </div>
+                <h3 className="text-xl font-headline font-bold text-on-surface mb-2">Your list is empty</h3>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {Object.keys(groupedByStore).sort().map((storeName) => {
+                  const itemsInStore = groupedByStore[storeName];
+                  const officialStore = STORE_OPTIONS.find(s => s.name.toLowerCase() === storeName.toLowerCase());
+                  
+                  const storeHeader = officialStore?.imageLogo ? (
+                    <div className="flex items-center px-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm">
+                      <img 
+                        src={officialStore.imageLogo}
+                        alt={storeName} 
+                        className="h-5 sm:h-6 max-w-[100px] sm:max-w-[120px] object-contain object-left" 
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                      <div className="ml-auto bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md flex items-center justify-center">
+                        <span className="text-xs font-bold">{itemsInStore.length}</span>
                       </div>
                     </div>
-                    <button onClick={() => handleDelete(item.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                ))}
-              </div>
-            ))}
-            {Object.keys(groupedByStore).length === 0 && (
-              <div className="text-center text-slate-500 py-10 text-sm">
-                Your list is empty. Time to plan the next run.
+                  ) : (
+                    <div className={`flex items-center px-4 py-3 rounded-xl border shadow-sm font-headline font-bold uppercase tracking-wider text-sm ${officialStore?.color || 'bg-white text-slate-600 border-slate-200'}`}>
+                      {officialStore?.logo || storeName}
+                      <div className="ml-auto bg-black/5 px-2.5 py-1 rounded-md flex items-center justify-center">
+                        <span className="text-xs font-bold">{itemsInStore.length}</span>
+                      </div>
+                    </div>
+                  );
+                  const categoryOrder = CATEGORIES.reduce((acc, cat, index) => {
+                    acc[cat.name] = index;
+                    return acc;
+                  }, {} as Record<string, number>);
+                  const sortedItems = [...itemsInStore].sort((a, b) => {
+                    const orderA = categoryOrder[a.category || ''] ?? 99;
+                    const orderB = categoryOrder[b.category || ''] ?? 99;
+                    return orderA - orderB;
+                  });
+
+                  return (
+                    <div key={storeName} className="mb-6 flex flex-col gap-3">
+                      {storeHeader}
+                      <div className="flex flex-col gap-2">
+                        {sortedItems.map((item: GroceryItem) => (
+                          <ItemCard 
+                            key={item.id} 
+                            id={item.id} 
+                            name={item.name} 
+                            category={item.category || 'Unknown'} 
+                            inCart={item.inCart} 
+                            viewMode="list" 
+                            onToggleCart={handleToggleCart} 
+                            onDelete={handleDeleteItem} 
+                            onEdit={() => setEditingItem(item)} 
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
-          </TabsContent>
+          </>
+        )}
 
-          <TabsContent value="cart" className="mt-6 space-y-3">
-            {cartItems.length > 0 && (
-              <button onClick={handleCompleteTrip} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-95 transition-all mb-4">
-                Complete Trip & Sync Cloud
-              </button>
-            )}
-            {cartItems.map(item => (
-              <div key={item.id} className="p-4 bg-white/50 dark:bg-slate-900/50 border border-dashed rounded-2xl opacity-60 flex justify-between items-center">
-                <span className="text-sm font-medium line-through">{item.name}</span>
-                <CheckCheck className="w-4 h-4 text-green-500" />
-              </div>
+        {activeTab === 'cart' && (
+          <div className="flex flex-col gap-3 mt-2">
+            <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">Ready for Checkout</h2>
+            {cartTabItems.map((item: GroceryItem) => (
+              <ItemCard 
+                key={item.id} 
+                id={item.id} 
+                name={item.name} 
+                category={item.category || 'Unknown'} 
+                inCart={item.inCart} 
+                viewMode="cart" 
+                onToggleCart={handleToggleCart} 
+                onDelete={handleDeleteItem} 
+              />
             ))}
-          </TabsContent>
+            <button 
+              onClick={handleCompletePurchase}
+              className="mt-6 w-full bg-[#d3e3d8] text-[#174525] font-headline font-bold py-4 rounded-xl shadow-sm border border-[#b8d0c0] hover:bg-[#c2d6cb] transition-all flex justify-center items-center gap-2 active:scale-95"
+            >
+              <span className="material-symbols-outlined text-xl">check_circle</span>
+              Complete Purchase
+            </button>
+          </div>
+        )}
 
-          <TabsContent value="history" className="mt-6 space-y-3">
-            {historyItems.map(item => (
-              <div key={item.id} className="p-4 bg-white dark:bg-slate-900 border rounded-2xl flex justify-between items-center group">
-                <div>
-                  <p className="text-sm font-bold">{item.name}</p>
-                  <p className="text-[9px] font-black opacity-30 uppercase tracking-tighter">
-                    {item.purchase_count} times • {getTimeAgo(item.purchase_dates?.[item.purchase_dates.length - 1])}
-                  </p>
+        {/* UPDATED HABITS TAB */}
+        {activeTab === 'habits' && (
+          <div className="w-full flex flex-col gap-8 pb-24 animate-fade-in">
+            <section>
+              <div className="flex flex-col gap-4 mb-6">
+                <h2 className="text-xl font-headline font-bold text-on-surface">Habits Dashboard</h2>
+                
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+                  <input 
+                    type="text"
+                    placeholder="Find item history..."
+                    value={habitSearchQuery}
+                    onChange={(e) => setHabitSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow"
+                  />
+                  {habitSearchQuery && (
+                    <button 
+                      onClick={() => setHabitSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <span className="material-symbols-outlined text-sm">close</span>
+                    </button>
+                  )}
                 </div>
-                <button onClick={() => handleAddItem(item.name)} className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-full text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <RefreshCcw className="w-4 h-4" />
-                </button>
               </div>
-            ))}
-          </TabsContent>
-        </Tabs>
+
+              <div className="flex flex-col gap-3">
+                {habitsDashboardData
+                  .filter(habit => habit.name.toLowerCase().includes(habitSearchQuery.toLowerCase().trim()))
+                  .map((habit, index) => (
+                    <div key={`${habit.id}-${index}`} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                      <div className="flex justify-between items-center mb-5">
+                        <h3 className="font-bold text-slate-800 capitalize">{habit.name}</h3>
+                        
+                        {/* INJECTED INTERACTIVE BUTTON */}
+                        <button 
+                          onClick={() => {
+                            const isAlreadyOnList = listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase());
+                            if (!isAlreadyOnList) {
+                              handleAddFromHabits(habit); 
+                            }
+                          }}
+                          disabled={listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase())}
+                          className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-md transition-all active:scale-95 ${
+                            listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase())
+                              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                              : habit.status === 'Restock Soon' 
+                                ? 'bg-red-100 text-red-700 hover:bg-red-200 shadow-sm' 
+                                : habit.status === 'Need Data'
+                                  ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 shadow-sm'
+                                  : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 shadow-sm'
+                          }`}
+                          aria-label={`Add ${habit.name} to list`}
+                        >
+                          {listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase()) 
+                            ? 'Added to List' 
+                            : habit.status}
+                          
+                          {listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase()) ? (
+                            <span className="material-symbols-outlined text-[16px] font-bold">check</span>
+                          ) : (
+                            <span className="material-symbols-outlined text-[16px] font-bold">add</span>
+                          )}
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-2 text-sm text-slate-600 mb-3">
+                        <div>
+                          <span className="block text-xs text-slate-400">Purchases</span>
+                          <span className="font-medium">{habit.totalPurchases}</span>
+                        </div>
+                        <div>
+                          <span className="block text-xs text-slate-400">Avg Cycle</span>
+                          <span className="font-medium">{habit.avgIntervalDays ? `${habit.avgIntervalDays}d` : '--'}</span>
+                        </div>
+                        <div>
+                          <span className="block text-xs text-slate-400">Last Bought</span>
+                          <span className="font-medium">{habit.daysSinceLast !== null ? `${habit.daysSinceLast}d ago` : '--'}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 pt-3 border-t border-slate-100 mt-2">
+                        <span className="text-xs text-slate-400">Last bought from:</span>
+                        <span className="text-xs font-medium text-slate-700 capitalize">
+                          {habit.lastPurchasedStore}
+                        </span>
+                      </div>
+                      
+                      <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all ${
+                            habit.status === 'Restock Soon' ? 'bg-red-500' : 
+                            habit.status === 'Need Data' ? 'bg-amber-400' : 
+                            'bg-emerald-500'
+                          }`}
+                          style={{ width: `${habit.progressPercent}%` }}
+                        />
+                      </div>
+                    </div>
+                ))}
+                
+                {habitsDashboardData.length === 0 && (
+                  <p className="text-sm text-on-surface-variant text-center py-8">Complete a purchase to generate habit data.</p>
+                )}
+                
+                {habitsDashboardData.length > 0 && 
+                 habitSearchQuery && 
+                 habitsDashboardData.filter(h => h.name.toLowerCase().includes(habitSearchQuery.toLowerCase().trim())).length === 0 && (
+                  <p className="text-sm text-slate-500 text-center py-8 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    No purchase history found for "{habitSearchQuery}"
+                  </p>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
       </div>
-    </div>
+
+      {editingItem && (
+        <EditModal 
+          item={editingItem} 
+          onClose={() => setEditingItem(null)} 
+          onSave={handleUpdateItem} 
+          onForget={handleForgetPreference}
+        />
+      )}
+
+      <Toast 
+        message={toastMessage || ''} 
+        isVisible={!!toastMessage} 
+        onClose={() => setToastMessage(null)} 
+      />
+    </Layout>
   );
 }
