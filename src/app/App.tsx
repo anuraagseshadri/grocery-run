@@ -218,9 +218,10 @@ export default function App() {
     }
     
     setHasDismissedReminder(false);
-    // Show success message with correct singular/plural
+    
+    // Show success message with correct singular/plural using setToastMessage
     const itemCount = cartItems.length;
-    toast.success(`Purchase complete. Your ${itemCount === 1 ? "item is" : "items are"} now tracked in Habits.`);
+    setToastMessage(`Purchase complete. Your ${itemCount === 1 ? "item is" : "items are"} now tracked in Habits.`);
     setActiveTab('habits');
   };
 
