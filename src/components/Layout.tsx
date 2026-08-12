@@ -21,6 +21,8 @@ export function Layout({ children, activeTab, setActiveTab, userEmail }: LayoutP
     }
   };
 
+  const userInitial = userEmail ? userEmail.charAt(0).toUpperCase() : '?';
+
   return (
     <div className="min-h-screen bg-[#E4F6E8] text-slate-900 relative">
       
@@ -34,14 +36,27 @@ export function Layout({ children, activeTab, setActiveTab, userEmail }: LayoutP
             </h1>
           </div>
           {userEmail && (
-            <button 
-              onClick={handleSignOut}
-              className="text-xs font-medium text-slate-500 hover:text-red-600 transition-colors flex items-center gap-2"
-              aria-label="Sign out"
-            >
-              <span className="material-symbols-outlined text-sm">logout</span>
-              <span className="hidden sm:inline">{userEmail.split('@')[0]}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-600 hidden sm:inline">
+                {userEmail.split('@')[0]}
+              </span>
+              <div className="relative group">
+                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md cursor-pointer hover:bg-blue-700 transition-colors">
+                  {userInitial}
+                </div>
+                {/* Tooltip on hover/tap */}
+                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-200 p-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                  <p className="text-xs text-slate-500 mb-2 truncate">{userEmail}</p>
+                  <button 
+                    onClick={handleSignOut}
+                    className="w-full text-left text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1.5 rounded transition-colors flex items-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-sm">logout</span>
+                    Sign out
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </header>
