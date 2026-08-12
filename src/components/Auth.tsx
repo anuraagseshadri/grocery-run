@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { auth, googleProvider } from '../firebase';
-import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
 import { toast } from 'sonner';
-import { Mail, Lock, Loader2, Sparkles, Chrome } from 'lucide-react';
+import { Mail, Lock, Loader2 } from 'lucide-react';
 
 export function Auth() {
   const [loading, setLoading] = useState(false);
@@ -11,13 +11,23 @@ export function Auth() {
   const [isSignUp, setIsSignUp] = useState(false);
 
   const handleGoogleSignIn = async () => {
-    setLoading(true);
     try {
-      await signInWithPopup(auth, googleProvider);
+      setLoading(true);
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      toast.success("Welcome!");
     } catch (error: any) {
-      toast.error(error.message || "Failed to sign in with Google");
+      console.error("Google sign-in error:", error);
+      if (error.code === 'auth/popup-blocked') {
+        toast.error("Popup was blocked. Please allow popups for this site.");
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        // User closed the popup, do nothing
+      } else {
+        toast.error(error.message || "Failed to sign in with Google");
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -27,92 +37,89 @@ export function Auth() {
     try {
       if (isSignUp) {
         await createUserWithEmailAndPassword(auth, email, password);
-        toast.success("Account created! Welcome to Grocery Run.");
+        toast.success("Account created! Welcome aboard.");
       } else {
         await signInWithEmailAndPassword(auth, email, password);
         toast.success("Welcome back!");
       }
     } catch (error: any) {
       toast.error(error.message || "Authentication failed");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f2f9ea] p-6 relative overflow-hidden">
-      {/* Decorative blurs */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-[#9df197]/20 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
-      <div className="absolute bottom-0 left-0 w-72 h-72 bg-[#70b5ff]/10 rounded-full blur-3xl -ml-20 -mb-20 pointer-events-none"></div>
-
-      <div className="z-10 flex flex-col items-center text-center space-y-6 max-w-sm w-full">
-        {/* Brand Icon */}
-        <div className="bg-[#ebf3e3] p-4 rounded-full shadow-sm mb-2">
-          <span className="material-symbols-outlined text-5xl text-[#176a21]">eco</span>
-        </div>
-
-        <div className="space-y-2">
-          <h1 className="font-['Plus_Jakarta_Sans'] font-extrabold text-4xl text-[#176a21] tracking-tight">
+    <div className="min-h-screen flex items-center justify-center bg-[#E4F6E8] p-6">
+      <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-headline font-bold text-primary tracking-tight">
             Grocery Run
-          </h1>
-          <p className="font-['Be_Vietnam_Pro'] text-[#575e52] text-lg">
+          </h2>
+          <p className="text-slate-500 mt-2">
             {isSignUp ? 'Create your account' : 'Welcome back'}
           </p>
         </div>
 
-        {/* Google Sign In Button */}
+        {/* Google Sign-In Button */}
         <button
           onClick={handleGoogleSignIn}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-200 hover:border-[#176a21] text-slate-700 font-bold py-3.5 rounded-xl transition-all active:scale-95 disabled:opacity-50"
+          className="w-full py-3.5 bg-white border-2 border-slate-200 rounded-xl font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-3 mb-6"
         >
-          <Chrome className="w-5 h-5 text-red-500" />
+          <svg className="w-5 h-5" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M23.766 12.2764c0-.9172-.079-1.7863-.2228-2.6149H12v4.9397h6.6076a5.623 5.623 0 0 1-2.4409 3.6908v3.048h3.9507c2.3045-2.1198 3.6486-5.2416 3.6486-9.0636z"/>
+            <path fill="#34A853" d="M12 24c3.2996 0 6.0606-1.0916 8.0759-2.962l-3.9507-3.048c-1.0916.7324-2.4906 1.1669-4.1252 1.1669-3.1676 0-5.8528-2.137-6.8124-5.0096H1.0989v3.1488C3.0945 21.2368 7.2896 24 12 24z"/>
+            <path fill="#FBBC05" d="M5.1872 14.1473a7.292 7.292 0 0 1 0-4.2946V6.7039H1.0989a11.997 11.997 0 0 0 0 10.5922l4.0883-3.1488z"/>
+            <path fill="#EA4335" d="M12 4.8431c1.7863 0 3.3898.6152 4.6478 1.8117l3.488-3.488C17.9952 1.146 15.2342 0 12 0 7.2896 0 3.0945 2.7633 1.0989 6.7039l4.0883 3.1488c.9596-2.8726 3.6448-5.0096 6.8124-5.0096z"/>
+          </svg>
           Continue with Google
         </button>
 
-        <div className="relative w-full">
+        <div className="relative mb-6">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-slate-300"></div>
+            <div className="w-full border-t border-slate-200"></div>
           </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-[#f2f9ea] px-2 text-slate-500">Or use email</span>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-4 bg-white text-slate-400">or</span>
           </div>
         </div>
 
         {/* Email/Password Form */}
-        <form onSubmit={handleAuth} className="w-full space-y-4">
+        <form onSubmit={handleAuth} className="space-y-4">
           <div className="relative">
-            <Mail className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
+            <Mail className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
             <input 
               type="email" 
-              placeholder="Email address" 
+              placeholder="Email" 
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full pl-10 pr-4 py-3.5 rounded-xl border-2 border-slate-200 focus:border-[#176a21] outline-none transition-all bg-white"
+              className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all"
               required 
             />
           </div>
           <div className="relative">
-            <Lock className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
+            <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
             <input 
               type="password" 
               placeholder="Password" 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-10 pr-4 py-3.5 rounded-xl border-2 border-slate-200 focus:border-[#176a21] outline-none transition-all bg-white"
+              className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all"
               required 
             />
           </div>
           <button 
             disabled={loading}
-            className="w-full bg-[#176a21] hover:bg-[#0f4d15] text-white font-bold py-3.5 rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-3.5 bg-primary text-white rounded-xl font-bold shadow-lg hover:opacity-90 transition-all flex items-center justify-center gap-2"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isSignUp ? 'Create Account' : 'Sign In')}
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isSignUp ? 'Sign Up' : 'Sign In')}
           </button>
         </form>
 
         <button 
           onClick={() => setIsSignUp(!isSignUp)}
-          className="text-sm font-medium text-[#575e52] hover:text-[#176a21] transition-colors"
+          className="w-full mt-6 text-sm font-medium text-slate-500 hover:text-primary transition-colors"
         >
           {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
         </button>
