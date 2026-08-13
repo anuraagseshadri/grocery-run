@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Logo } from './Logo';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
@@ -12,6 +12,8 @@ interface LayoutProps {
 }
 
 export function Layout({ children, activeTab, setActiveTab, userEmail }: LayoutProps) {
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -26,7 +28,7 @@ export function Layout({ children, activeTab, setActiveTab, userEmail }: LayoutP
   return (
     <div className="min-h-screen bg-[#E4F6E8] text-slate-900 relative">
       
-      {/* HEADER: Solid white with downward shadow */}
+      {/* HEADER */}
       <header className="sticky top-0 z-40 bg-white px-4 pt-6 pb-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -36,26 +38,40 @@ export function Layout({ children, activeTab, setActiveTab, userEmail }: LayoutP
             </h1>
           </div>
           {userEmail && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-slate-600 hidden sm:inline">
-                {userEmail.split('@')[0]}
-              </span>
-              <div className="relative group">
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md cursor-pointer hover:bg-blue-700 transition-colors">
-                  {userInitial}
-                </div>
-                {/* Tooltip on hover/tap */}
-                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-200 p-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                  <p className="text-xs text-slate-500 mb-2 truncate">{userEmail}</p>
-                  <button 
-                    onClick={handleSignOut}
-                    className="w-full text-left text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1.5 rounded transition-colors flex items-center gap-2"
-                  >
-                    <span className="material-symbols-outlined text-sm">logout</span>
-                    Sign out
-                  </button>
-                </div>
-              </div>
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+                aria-label="User menu"
+              >
+                {userInitial}
+              </button>
+              
+              {/* Menu dropdown - shown on click/tap */}
+              {showUserMenu && (
+                <>
+                  {/* Backdrop to close menu when tapping outside */}
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowUserMenu(false)}
+                  />
+                  
+                  {/* Menu popup */}
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-200 p-3 z-50">
+                    <p className="text-xs text-slate-500 mb-2 truncate">{userEmail}</p>
+                    <button 
+                      onClick={() => {
+                        handleSignOut();
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full text-left text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1.5 rounded transition-colors flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-sm">logout</span>
+                      Sign out
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
