@@ -579,6 +579,15 @@ export default function App() {
               <div className="flex flex-col gap-4 mb-6">
                 <h2 className="text-xl font-headline font-bold text-on-surface">Habits Dashboard</h2>
                 
+                {/* NEW: Explanatory UX Copy */}
+                <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                  <p className="text-sm text-blue-800 leading-relaxed">
+                    <span className="font-bold">How it works:</span> The Habits Dashboard needs at least{" "}
+                    <span className="font-semibold">2 purchases of the same item</span> to calculate your average usage and predict when you'll run out. 
+                    Complete a few shopping trips to start seeing personalized predictions!
+                  </p>
+                </div>
+
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
                   <input 
@@ -675,7 +684,18 @@ export default function App() {
                 ))}
                 
                 {habitsDashboardData.length === 0 && (
-                  <p className="text-sm text-on-surface-variant text-center py-8">Complete a purchase to generate habit data.</p>
+                  <div className="text-center py-12 px-6 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <span className="material-symbols-outlined text-3xl text-slate-400">monitoring</span>
+                    </div>
+                    <h3 className="font-bold text-slate-800 mb-2">No habit data yet</h3>
+                    <p className="text-sm text-slate-600 mb-4">
+                      Complete your first purchase to start tracking your grocery habits.
+                    </p>
+                    <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg inline-block">
+                      💡 <span className="font-semibold">Tip:</span> You need at least 2 purchases of the same item to see predictions.
+                    </p>
+                  </div>
                 )}
                 
                 {habitsDashboardData.length > 0 && 
