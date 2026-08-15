@@ -42,21 +42,18 @@ export const STORE_OPTIONS = [
     color: 'bg-white border-slate-200 text-slate-600', 
     logo: 'Other' 
   },
- { 
+  { 
     name: 'Asian Grocery', 
     logo: '🍜 ASIAN GROCERY', 
-    // Implements a sleek, high-contrast crimson gradient
     color: 'bg-gradient-to-r from-red-700 to-rose-900 text-white border-red-900 shadow-sm' 
   },
-{ 
+  { 
     name: 'Indian Grocery', 
     logo: '🇮🇳 INDIAN GROCERY', 
-    // Implements a left-to-right gradient using exact flag hex codes
     color: 'bg-gradient-to-r from-[#FF9933] via-[#FFFFFF] to-[#138808] text-slate-900 border-slate-300 shadow-sm'
   }
 ];
 
-// CRITICAL: App.tsx expects 'CATEGORIES', so we use that name here.
 export const CATEGORIES = [
   { name: 'Produce', icon: 'mdi:leaf' },
   { name: 'Bakery', icon: 'mdi:bread-slice' },
@@ -75,7 +72,6 @@ export const CATEGORIES = [
   { name: 'General', icon: 'mdi:shopping-outline' }
 ];
 
-// Only declared ONCE here to prevent redeclaration errors
 export const getCategoryBgColor = (category?: string) => {
   if (!category) return 'bg-gray-100 border-gray-200 text-gray-600';
   const cat = category.trim();
@@ -96,6 +92,7 @@ export const getCategoryBgColor = (category?: string) => {
   }
 };
 
+// Renamed from getIconForItem to getItemIcon to match App.tsx import
 export const getItemIcon = (name: string): string => {
   const n = name.toLowerCase().trim();
 
@@ -111,6 +108,11 @@ export const getItemIcon = (name: string): string => {
   if (n.includes('cake')) return 'fluent-emoji-flat:shortcake';
   if (n.includes('flour') || n.includes('aata') || n.includes('besan')) return 'game-icons:flour';
   if (n.includes('baking powder') || n.includes('baking soda')) return 'fluent-emoji-flat:salt';
+  
+  // NEW: Shrimp, Diaper, Coke/Soda
+  if (n.includes('shrimp') || n.includes('prawn')) return 'fluent-emoji-flat:shrimp';
+  if (n.includes('diaper') || n.includes('nappy')) return 'fluent-emoji-flat:baby-symbol';
+  if (n.includes('coke') || n.includes('cola') || n.includes('soda')) return 'fluent-emoji-flat:bottle-with-popping-cork';
 
   // ==========================================
   // PRODUCE 
