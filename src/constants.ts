@@ -54,6 +54,7 @@ export const STORE_OPTIONS = [
   }
 ];
 
+// FIXED: Updated 'Beverages' to 'Drinks & Beverages' to match your data
 export const CATEGORIES = [
   { name: 'Produce', icon: 'mdi:leaf' },
   { name: 'Bakery', icon: 'mdi:bread-slice' },
@@ -64,7 +65,7 @@ export const CATEGORIES = [
   { name: 'Breakfast & Cereal', icon: 'mdi:bowl' },
   { name: 'Cooking Essentials', icon: 'mdi:shaker' },
   { name: 'Dessert & Snacks', icon: 'mdi:cookie' },
-  { name: 'Beverages', icon: 'mdi:cup-water' },
+  { name: 'Drinks & Beverages', icon: 'mdi:cup-water' }, // Updated Name
   { name: 'Frozen', icon: 'mdi:snowflake' },
   { name: 'Household & Cleaning', icon: 'mdi:broom' },
   { name: 'Pharmacy & Personal Care', icon: 'mdi:pill' },
@@ -86,13 +87,17 @@ export const getCategoryBgColor = (category?: string) => {
     case 'Breakfast & Cereal': return 'bg-teal-100 border-teal-200 text-teal-800';
     case 'Cooking Essentials': return 'bg-amber-50 border-amber-200 text-amber-700';
     case 'Dessert & Snacks': return 'bg-indigo-100 border-indigo-200 text-indigo-800';
+    // FIXED: Added Drinks & Beverages case
+    case 'Drinks & Beverages': 
+    case 'Beverages': return 'bg-cyan-100 border-cyan-200 text-cyan-800';
     case 'Household & Cleaning': return 'bg-slate-200 border-slate-300 text-slate-700';
+    // FIXED: Added Baby case
+    case 'Baby': return 'bg-pink-100 border-pink-200 text-pink-800';
     case 'General': return 'bg-stone-200 border-stone-300 text-stone-700';
     default: return 'bg-gray-50 border-gray-200 text-gray-500';
   }
 };
 
-// Renamed from getIconForItem to getItemIcon to match App.tsx import
 export const getItemIcon = (name: string): string => {
   const n = name.toLowerCase().trim();
 
@@ -112,8 +117,7 @@ export const getItemIcon = (name: string): string => {
   // NEW: Shrimp, Diaper, Coke/Soda
   if (n.includes('shrimp') || n.includes('prawn')) return 'fluent-emoji-flat:shrimp';
   if (n.includes('diaper') || n.includes('nappy')) return 'fluent-emoji-flat:baby-symbol';
-  if (n.includes('coke') || n.includes('cola') || n.includes('soda')) return 'fluent-emoji-flat:bottle-with-popping-cork';
-
+  
   // ==========================================
   // PRODUCE 
   // ==========================================
@@ -159,10 +163,14 @@ export const getItemIcon = (name: string): string => {
   if (n.includes('yogurt')) return 'fluent-emoji-flat:cup-with-straw';
 
   // ==========================================
-  // BEVERAGES
+  // DRINKS & BEVERAGES (FIXED)
   // ==========================================
   if (n.includes('coffee') || n.includes('tea')) return 'fluent-emoji-flat:hot-beverage';
   if (n.includes('juice')) return 'fluent-emoji-flat:beverage-box';
+  // General drink detection for "Drinks & Beverages" category
+  if (n.includes('water') || n.includes('soda') || n.includes('coke') || n.includes('cola') || n.includes('beer') || n.includes('wine') || n.includes('drink') || n.includes('beverage')) {
+    return 'fluent-emoji-flat:cup-with-straw';
+  }
 
   // ==========================================
   // MEAT & SEAFOOD
@@ -177,8 +185,12 @@ export const getItemIcon = (name: string): string => {
   // ==========================================
   if (n.includes('soap')) return 'fluent-emoji-flat:soap';
   if (n.includes('paper') || n.includes('tissue') || n.includes('towel')) return 'fluent-emoji-flat:roll-of-paper';
-  if (n.includes('water')) return 'fluent-emoji-flat:droplet';
   if (n.includes('pill') || n.includes('med') || n.includes('vitamin')) return 'fluent-emoji-flat:pill';
+
+  // ==========================================
+  // BABY (FIXED)
+  // ==========================================
+  if (n.includes('diaper') || n.includes('nappy') || n.includes('baby')) return 'fluent-emoji-flat:baby-symbol';
 
   // ==========================================
   // FROZEN
