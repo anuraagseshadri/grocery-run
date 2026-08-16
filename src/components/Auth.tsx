@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { auth, googleProvider } from '../firebase';
+import { auth } from '../firebase';
 import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
 import { toast } from 'sonner';
 import { Mail, Lock, Loader2 } from 'lucide-react';
@@ -58,12 +58,18 @@ export function Auth() {
         toast.success("Welcome back!");
       }
     } catch (error: any) {
-      console.error("Auth error:", error);
-      
+      // CRITICAL DEBUGGING: Log the full error object to console
+      console.error("=== AUTH ERROR START ===");
+      console.error("Full Error Object:", error);
+      console.error("Error Code:", error?.code);
+      console.error("Error Message:", error?.message);
+      console.error("=== AUTH ERROR END ===");
+
       // User-friendly error messages
       let errorMessage = "Authentication failed. Please try again.";
       
-      if (error.code === 'auth/invalid-credential') {
+      // Handle various Firebase auth error codes
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-email-password') {
         errorMessage = "Incorrect email or password. Please try again.";
       } else if (error.code === 'auth/wrong-password') {
         errorMessage = "Incorrect password. Please try again.";
@@ -75,7 +81,10 @@ export function Auth() {
         errorMessage = "Password is too weak. Use at least 6 characters.";
       } else if (error.code === 'auth/invalid-email') {
         errorMessage = "Please enter a valid email address.";
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = "Too many failed attempts. Please try again later.";
       } else if (error.message) {
+        // Fallback to the raw message if code isn't recognized
         errorMessage = error.message;
       }
       

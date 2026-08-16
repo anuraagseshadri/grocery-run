@@ -87,12 +87,12 @@ export const getCategoryBgColor = (category?: string) => {
     case 'Breakfast & Cereal': return 'bg-teal-100 border-teal-200 text-teal-800';
     case 'Cooking Essentials': return 'bg-amber-50 border-amber-200 text-amber-700';
     case 'Dessert & Snacks': return 'bg-indigo-100 border-indigo-200 text-indigo-800';
-    // FIXED: Added Drinks & Beverages case
+    // FIXED: Added Drinks & Beverages case with Cyan color
     case 'Drinks & Beverages': 
     case 'Beverages': return 'bg-cyan-100 border-cyan-200 text-cyan-800';
-    case 'Household & Cleaning': return 'bg-slate-200 border-slate-300 text-slate-700';
-    // FIXED: Added Baby case
+    // FIXED: Added Baby case with Pink color
     case 'Baby': return 'bg-pink-100 border-pink-200 text-pink-800';
+    case 'Household & Cleaning': return 'bg-slate-200 border-slate-300 text-slate-700';
     case 'General': return 'bg-stone-200 border-stone-300 text-stone-700';
     default: return 'bg-gray-50 border-gray-200 text-gray-500';
   }
@@ -102,8 +102,14 @@ export const getItemIcon = (name: string): string => {
   const n = name.toLowerCase().trim();
 
   // ==========================================
-  // SPECIFIC/NEW ICONIFY MAPPINGS
+  // SPECIFIC BRANDS & KEYWORDS (HIGHEST PRIORITY)
   // ==========================================
+  // Check specific brands FIRST before generic categories
+  if (n.includes('coke') || n.includes('cola') || n.includes('pepsi')) return 'fluent-emoji-flat:bottle-with-popping-cork';
+  if (n.includes('shrimp') || n.includes('prawn')) return 'fluent-emoji-flat:shrimp';
+  if (n.includes('diaper') || n.includes('nappy')) return 'fluent-emoji-flat:baby-symbol';
+  
+  // Generic keywords
   if (n.includes('salt')) return 'fluent-emoji-flat:salt';
   if (n.includes('sugar')) return 'mdi:cube-outline';
   if (n.includes('paneer') || n.includes('cottage cheese')) return 'fluent-emoji-flat:cheese-wedge';
@@ -113,11 +119,9 @@ export const getItemIcon = (name: string): string => {
   if (n.includes('cake')) return 'fluent-emoji-flat:shortcake';
   if (n.includes('flour') || n.includes('aata') || n.includes('besan')) return 'game-icons:flour';
   if (n.includes('baking powder') || n.includes('baking soda')) return 'fluent-emoji-flat:salt';
-  
-  // NEW: Shrimp, Diaper, Coke/Soda
-  if (n.includes('shrimp') || n.includes('prawn')) return 'fluent-emoji-flat:shrimp';
-  if (n.includes('diaper') || n.includes('nappy')) return 'fluent-emoji-flat:baby-symbol';
-  
+  // FIX: Explicitly catch items named just "Drinks"
+  if (n === 'drinks' || n.includes('drink')) return 'fluent-emoji-flat:cup-with-straw';
+
   // ==========================================
   // PRODUCE 
   // ==========================================
@@ -163,12 +167,12 @@ export const getItemIcon = (name: string): string => {
   if (n.includes('yogurt')) return 'fluent-emoji-flat:cup-with-straw';
 
   // ==========================================
-  // DRINKS & BEVERAGES (FIXED)
+  // DRINKS & BEVERAGES
   // ==========================================
   if (n.includes('coffee') || n.includes('tea')) return 'fluent-emoji-flat:hot-beverage';
   if (n.includes('juice')) return 'fluent-emoji-flat:beverage-box';
-  // General drink detection for "Drinks & Beverages" category
-  if (n.includes('water') || n.includes('soda') || n.includes('coke') || n.includes('cola') || n.includes('beer') || n.includes('wine') || n.includes('drink') || n.includes('beverage')) {
+  // General drink detection fallback
+  if (n.includes('water') || n.includes('soda') || n.includes('beer') || n.includes('wine') || n.includes('beverage')) {
     return 'fluent-emoji-flat:cup-with-straw';
   }
 
@@ -188,9 +192,9 @@ export const getItemIcon = (name: string): string => {
   if (n.includes('pill') || n.includes('med') || n.includes('vitamin')) return 'fluent-emoji-flat:pill';
 
   // ==========================================
-  // BABY (FIXED)
+  // BABY
   // ==========================================
-  if (n.includes('diaper') || n.includes('nappy') || n.includes('baby')) return 'fluent-emoji-flat:baby-symbol';
+  if (n.includes('baby')) return 'fluent-emoji-flat:baby-symbol';
 
   // ==========================================
   // FROZEN
