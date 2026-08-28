@@ -1,8 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App'  // ✅ Correct - App.tsx is in src/ folder
+import App from './app/App'
 import { Toaster } from 'sonner'
-import './index.css'
+import './styles/index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
