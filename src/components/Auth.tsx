@@ -8,23 +8,24 @@ export function Auth() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
+  
+  // Persistent local error state
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true);
+      setAuthError(null);
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       toast.success("Welcome!");
     } catch (error: any) {
       console.error("Google sign-in error:", error);
       if (error.code === 'auth/popup-blocked') {
-        toast.error("Popup was blocked. Please allow popups for this site.");
-      } else if (error.code === 'auth/popup-closed-by-user') {
-        // User closed the popup, do nothing
-      } else {
-        toast.error(error.message || "Failed to sign in with Google");
+        setAuthError("Popup was blocked. Please allow popups for this site.");
+      } else if (error.code !== 'auth/popup-closed-by-user') {
+        setAuthError("Failed to sign in with Google.");
       }
     } finally {
       setLoading(false);
@@ -34,17 +35,11 @@ export function Auth() {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setAuthError(null);
     
-    // Validate passwords match on sign-up
-    if (isSignUp && password !== confirmPassword) {
-      toast.error("Passwords do not match. Please try again.");
-      setLoading(false);
-      return;
-    }
-
     // Validate password length
     if (isSignUp && password.length < 6) {
-      toast.error("Password must be at least 6 characters.");
+      setAuthError("Password must be at least 6 characters.");
       setLoading(false);
       return;
     }
@@ -58,37 +53,13 @@ export function Auth() {
         toast.success("Welcome back!");
       }
     } catch (error: any) {
-      // CRITICAL DEBUGGING: Log the full error object to console
-      console.error("=== AUTH ERROR START ===");
-      console.error("Full Error Object:", error);
-      console.error("Error Code:", error?.code);
-      console.error("Error Message:", error?.message);
-      console.error("=== AUTH ERROR END ===");
-
-      // User-friendly error messages
-      let errorMessage = "Authentication failed. Please try again.";
-      
-      // Handle various Firebase auth error codes
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-email-password') {
-        errorMessage = "Incorrect email or password. Please try again.";
-      } else if (error.code === 'auth/wrong-password') {
-        errorMessage = "Incorrect password. Please try again.";
-      } else if (error.code === 'auth/user-not-found') {
-        errorMessage = "No account found with this email. Please sign up.";
-      } else if (error.code === 'auth/email-already-in-use') {
-        errorMessage = "This email is already registered. Please sign in.";
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = "Password is too weak. Use at least 6 characters.";
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = "Please enter a valid email address.";
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = "Too many failed attempts. Please try again later.";
-      } else if (error.message) {
-        // Fallback to the raw message if code isn't recognized
-        errorMessage = error.message;
+      console.error("Auth Error:", error);
+      // Obfuscated error fallback mapping
+      if (error.code === 'auth/too-many-requests') {
+        setAuthError("Too many failed attempts. Please try again later.");
+      } else {
+        setAuthError("Invalid email or password.");
       }
-      
-      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -138,7 +109,10 @@ export function Auth() {
               type="email" 
               placeholder="Email" 
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (authError) setAuthError(null);
+              }}
               className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all"
               required 
             />
@@ -149,37 +123,35 @@ export function Auth() {
               type="password" 
               placeholder="Password" 
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (authError) setAuthError(null);
+              }}
               className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all"
               required 
             />
           </div>
-          
-          {/* Confirm Password Field (Sign-up only) */}
-          {isSignUp && (
-            <div className="relative">
-              <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
-              <input 
-                type="password" 
-                placeholder="Confirm Password" 
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all"
-                required 
-              />
+
+          {/* Persistent Inline Error Block */}
+          {authError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm font-medium text-center">
+              {authError}
             </div>
           )}
           
           <button 
             disabled={loading}
-            className="w-full py-3.5 bg-primary text-white rounded-xl font-bold shadow-lg hover:opacity-90 transition-all flex items-center justify-center gap-2"
+            className="w-full py-3.5 bg-primary text-white rounded-xl font-bold shadow-lg hover:opacity-90 transition-all flex items-center justify-center gap-2 mt-2"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isSignUp ? 'Sign Up' : 'Sign In')}
           </button>
         </form>
 
         <button 
-          onClick={() => setIsSignUp(!isSignUp)}
+          onClick={() => {
+            setIsSignUp(!isSignUp);
+            setAuthError(null);
+          }}
           className="w-full mt-6 text-sm font-medium text-slate-500 hover:text-primary transition-colors"
         >
           {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}

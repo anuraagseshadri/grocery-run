@@ -478,7 +478,7 @@ export default function App() {
                     >
                       <button 
                         // Pass false to switch to list tab when adding from suggestions
-                        onClick={() => handleAddFromHabits(item, false)}
+                        onClick={() => handleAddFromHabits(item, true)}
                         className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-slate-700 whitespace-nowrap"
                       >
                         <Icon icon={getItemIcon(item.name)} className="text-lg" />
