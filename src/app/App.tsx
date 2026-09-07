@@ -24,6 +24,7 @@ interface GroceryItem {
   inCart: boolean;
   createdAt?: string;
   userId?: string;
+  cartedAt?: string | null;
 }
 
 const isDuplicateItem = (newItem: string, existingItem: string) => {
@@ -67,6 +68,7 @@ export default function App() {
   const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showStaleCartWarning, setShowStaleCartWarning] = useState(false);
 
   const [habitSearchQuery, setHabitSearchQuery] = useState('');
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
@@ -167,13 +169,20 @@ export default function App() {
     }
   };
 
-const handleToggleCart = async (id: string, currentState: boolean) => {
-  await updateDoc(doc(db, 'items', id), { inCart: !currentState });
-  setToastMessage(!currentState ? "Moved to Cart" : "Moved back to List");
-  
-  // Resets the dismissal state so the banner can trigger again
-  setHasDismissedReminder(false); 
-};
+  const handleToggleCart = async (id: string, currentState: boolean) => {
+    const payload: Partial<GroceryItem> = { inCart: !currentState };
+    
+    if (!currentState) {
+      payload.cartedAt = new Date().toISOString();
+    } else {
+      payload.cartedAt = null; 
+    }
+
+    await updateDoc(doc(db, 'items', id), payload);
+    setToastMessage(!currentState ? "Moved to Cart" : "Moved back to List");
+    
+    setHasDismissedReminder(false); 
+  };
 
   const handleDeleteItem = async (id: string) => {
     await deleteDoc(doc(db, 'items', id));
@@ -258,6 +267,31 @@ const handleToggleCart = async (id: string, currentState: boolean) => {
   
   const listTabItems = items;
   const cartTabItems = items.filter(item => item.inCart);
+
+  // Check for stale cart items upon window focus
+  useEffect(() => {
+    const checkStaleItems = () => {
+      if (cartTabItems.length === 0 || hasDismissedReminder) {
+        setShowStaleCartWarning(false);
+        return;
+      }
+      
+      const THREE_HOURS_MS = 10800000; 
+      const now = Date.now();
+      
+      const hasStale = cartTabItems.some(item => {
+        if (!item.cartedAt) return false;
+        return (now - new Date(item.cartedAt).getTime()) >= THREE_HOURS_MS;
+      });
+      
+      setShowStaleCartWarning(hasStale);
+    };
+
+    checkStaleItems();
+    
+    window.addEventListener('focus', checkStaleItems);
+    return () => window.removeEventListener('focus', checkStaleItems);
+  }, [cartTabItems, hasDismissedReminder]);
 
   const groupedByStore = listTabItems.reduce((groups, item) => {
     const rawStore = item.store?.trim() || 'Other';
@@ -417,7 +451,7 @@ const handleToggleCart = async (id: string, currentState: boolean) => {
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} userEmail={user.email}>
       
-      {activeTab !== 'list' && cartTabItems.length > 0 && !hasDismissedReminder && (
+      {showStaleCartWarning && (
         <div className="fixed top-4 left-4 right-4 z-50 animate-fade-in">
           <div className="bg-red-50 border-2 border-red-200 rounded-2xl shadow-xl overflow-hidden p-4">
             <div className="flex items-start gap-3">
