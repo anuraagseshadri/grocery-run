@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Auth } from '../components/Auth';
 import { Layout } from '../components/Layout';
 import { AddForm } from '../components/AddForm';
+import AddItemForm from '../components/AddItemForm';
 import { ItemCard } from '../components/ItemCard';
 import { EditModal } from '../components/EditModal';
 import { Toast } from '../components/Toast';
@@ -219,17 +220,14 @@ export default function App() {
     
     setHasDismissedReminder(false);
     
-    // Show success message with correct singular/plural using setToastMessage
     const itemCount = cartItems.length;
     setToastMessage(`Purchase complete. Your ${itemCount === 1 ? "item is" : "items are"} now tracked in Habits.`);
     setActiveTab('habits');
   };
 
-  // FIXED: Added stayOnTab parameter
   const handleAddFromHabits = async (habit: any, stayOnTab: boolean = false) => {
     if (!user) return;
     
-    // Check if already on list to avoid duplicates silently
     const alreadyOnList = items.some(i => i.name.toLowerCase() === habit.name.toLowerCase());
     if (alreadyOnList) {
       setToastMessage(`${habit.name} is already on your list`);
@@ -246,11 +244,8 @@ export default function App() {
         createdAt: new Date().toISOString()
       });
       
-      // Only show toast if not adding multiple items rapidly (optional UX choice)
-      // For now, we keep the toast but suppress the tab switch
       setToastMessage(`Added ${habit.name} to List`);
       
-      // FIXED: Only switch tabs if stayOnTab is false
       if (!stayOnTab) {
         setActiveTab('list'); 
       }
@@ -402,7 +397,6 @@ export default function App() {
     return suggestions;
   }, [purchaseHistory, items, dismissedSuggestions]);
 
-  // Show loading while checking auth
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f2f9ea]">
@@ -414,16 +408,14 @@ export default function App() {
     );
   }
 
-  // Show login if not authenticated
   if (!user) {
     return <Auth />;
   }
 
-  // Show main app if authenticated
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} userEmail={user.email}>
       
-      {cartTabItems.length > 0 && !hasDismissedReminder && (
+      {activeTab !== 'list' && cartTabItems.length > 0 && !hasDismissedReminder && (
         <div className="fixed top-4 left-4 right-4 z-50 animate-fade-in">
           <div className="bg-red-50 border-2 border-red-200 rounded-2xl shadow-xl overflow-hidden p-4">
             <div className="flex items-start gap-3">
@@ -462,7 +454,10 @@ export default function App() {
         
         {activeTab === 'list' && (
           <>
-            <AddForm onAddItem={handleAddItem} />
+            <div className="flex flex-col gap-4">
+              <AddItemForm onAddItem={handleAddItem} />
+              <AddForm onAddItem={handleAddItem} />
+            </div>
 
             {suggestedReplenishments.length > 0 && (
               <div className="mb-6 p-4 bg-white/50 backdrop-blur-md border border-primary/10 rounded-2xl shadow-[0_4px_20px_-4px_rgba(23,106,33,0.05)]">
@@ -477,11 +472,10 @@ export default function App() {
                       className="flex items-center bg-transparent rounded-full border border-primary/20 hover:border-primary/50 hover:bg-primary/5 transition-all"
                     >
                       <button 
-                        // Pass false to switch to list tab when adding from suggestions
                         onClick={() => handleAddFromHabits(item, true)}
                         className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-slate-700 whitespace-nowrap"
                       >
-                        <Icon icon={getItemIcon(item.name)} className="text-lg" />
+                        <Icon icon={getItemIcon(item.name, item.category)} className="text-lg" />
                         {item.name}
                         <span className="material-symbols-outlined text-[14px] text-primary/60 ml-0.5">add_circle</span>
                       </button>
@@ -592,14 +586,12 @@ export default function App() {
           </div>
         )}
 
-        {/* UPDATED HABITS TAB */}
         {activeTab === 'habits' && (
           <div className="w-full flex flex-col gap-8 pb-24 animate-fade-in">
             <section>
               <div className="flex flex-col gap-4 mb-6">
                 <h2 className="text-xl font-headline font-bold text-on-surface">Habits Dashboard</h2>
                 
-                {/* NEW: Explanatory UX Copy */}
                 <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl">
                   <p className="text-sm text-blue-800 leading-relaxed">
                     <span className="font-bold">How it works:</span> The Habits Dashboard needs at least{" "}
@@ -640,7 +632,6 @@ export default function App() {
                           <h3 className="font-bold text-slate-800 capitalize">{habit.name}</h3>
                           
                           <button 
-                            // FIXED: Pass true to stay on Habits tab
                             onClick={() => handleAddFromHabits(habit, true)}
                             disabled={isAlreadyOnList}
                             className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-md transition-all active:scale-95 ${
@@ -712,7 +703,7 @@ export default function App() {
                       Complete your first purchase to start tracking your grocery habits.
                     </p>
                     <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg inline-block">
-                      💡 <span className="font-semibold">Tip:</span> You need at least 2 purchases of the same item to see predictions.
+                       <span className="font-semibold">Tip:</span> You need at least 2 purchases of the same item to see predictions.
                     </p>
                   </div>
                 )}
