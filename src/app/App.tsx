@@ -1,17 +1,20 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Auth } from '../components/Auth';
 import { Layout } from '../components/Layout';
 import { AddForm } from '../components/AddForm';
+import AddItemForm from '../components/AddItemForm';
 import { ItemCard } from '../components/ItemCard';
 import { EditModal } from '../components/EditModal';
 import { Toast } from '../components/Toast';
 import { autoTagItem } from '../tagger';
 import { STORE_OPTIONS, getItemIcon, CATEGORIES } from '../constants';
 import { Icon } from '@iconify/react';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { 
   collection, onSnapshot, addDoc, doc, updateDoc, 
-  deleteDoc, getDoc, setDoc 
+  deleteDoc, getDoc, setDoc, query, where 
 } from 'firebase/firestore';
+import { onAuthStateChanged, User } from 'firebase/auth';
 
 interface GroceryItem {
   id: string;
@@ -20,6 +23,8 @@ interface GroceryItem {
   store: string;
   inCart: boolean;
   createdAt?: string;
+  userId?: string;
+  cartedAt?: string | null;
 }
 
 const isDuplicateItem = (newItem: string, existingItem: string) => {
@@ -56,11 +61,14 @@ const DEFAULT_VELOCITY: Record<string, number> = {
 };
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('list');
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
   const [editingItem, setEditingItem] = useState<GroceryItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showStaleCartWarning, setShowStaleCartWarning] = useState(false);
 
   const [habitSearchQuery, setHabitSearchQuery] = useState('');
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
@@ -86,24 +94,49 @@ export default function App() {
     });
   };
 
+  // Listen for auth state changes
   useEffect(() => {
-    const unsubscribeItems = onSnapshot(collection(db, 'items'), (snapshot) => {
-      const liveItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroceryItem));
-      setItems(liveItems);
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
     });
 
-    const unsubscribeHistory = onSnapshot(collection(db, 'purchaseHistory'), (snapshot) => {
-      const liveHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPurchaseHistory(liveHistory);
-    });
+    return () => unsubscribeAuth();
+  }, []);
+
+  // Listen to user's items only when logged in
+  useEffect(() => {
+    if (!user) {
+      setItems([]);
+      setPurchaseHistory([]);
+      return;
+    }
+
+    const unsubscribeItems = onSnapshot(
+      query(collection(db, 'items'), where('userId', '==', user.uid)),
+      (snapshot) => {
+        const liveItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroceryItem));
+        setItems(liveItems);
+      }
+    );
+
+    const unsubscribeHistory = onSnapshot(
+      query(collection(db, 'purchaseHistory'), where('userId', '==', user.uid)),
+      (snapshot) => {
+        const liveHistory = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setPurchaseHistory(liveHistory);
+      }
+    );
 
     return () => {
       unsubscribeItems();
       unsubscribeHistory();
     };
-  }, []);
+  }, [user]);
 
   const handleAddItem = async (newItemName: string) => {
+    if (!user) return;
+    
     const nameKey = newItemName.toLowerCase().trim();
     const existingMatch = items.find(item => isDuplicateItem(newItemName, item.name));
 
@@ -128,6 +161,7 @@ export default function App() {
         category: learnedCat || autoCat, 
         store,
         inCart: false, 
+        userId: user.uid,
         createdAt: new Date().toISOString()
       });
     } catch (error) {
@@ -136,9 +170,18 @@ export default function App() {
   };
 
   const handleToggleCart = async (id: string, currentState: boolean) => {
-    await updateDoc(doc(db, 'items', id), { inCart: !currentState });
+    const payload: Partial<GroceryItem> = { inCart: !currentState };
+    
+    if (!currentState) {
+      payload.cartedAt = new Date().toISOString();
+    } else {
+      payload.cartedAt = null; 
+    }
+
+    await updateDoc(doc(db, 'items', id), payload);
     setToastMessage(!currentState ? "Moved to Cart" : "Moved back to List");
-    setHasDismissedReminder(true);
+    
+    setHasDismissedReminder(false); 
   };
 
   const handleDeleteItem = async (id: string) => {
@@ -165,11 +208,14 @@ export default function App() {
   };
 
   const handleCompletePurchase = async () => {
+    if (!user) return;
+    
     const cartItems = items.filter(item => item.inCart);
     const checkoutTime = new Date().toISOString();
 
     await addDoc(collection(db, 'purchaseHistory'), {
       date: checkoutTime,
+      userId: user.uid,
       items: cartItems
     });
 
@@ -184,23 +230,68 @@ export default function App() {
     }
     
     setHasDismissedReminder(false);
+    
+    const itemCount = cartItems.length;
+    setToastMessage(`Purchase complete. Your ${itemCount === 1 ? "item is" : "items are"} now tracked in Habits.`);
     setActiveTab('habits');
   };
 
-  const handleAddFromHabits = async (habit: any) => {
-    await addDoc(collection(db, 'items'), {
-      name: habit.name, 
-      category: habit.category, 
-      store: habit.store,
-      inCart: false, 
-      createdAt: new Date().toISOString()
-    });
-    setToastMessage(`Added ${habit.name} to List`);
-    setActiveTab('list'); 
+  const handleAddFromHabits = async (habit: any, stayOnTab: boolean = false) => {
+    if (!user) return;
+    
+    const alreadyOnList = items.some(i => i.name.toLowerCase() === habit.name.toLowerCase());
+    if (alreadyOnList) {
+      setToastMessage(`${habit.name} is already on your list`);
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, 'items'), {
+        name: habit.name, 
+        category: habit.category, 
+        store: habit.store,
+        userId: user.uid,
+        inCart: false, 
+        createdAt: new Date().toISOString()
+      });
+      
+      setToastMessage(`Added ${habit.name} to List`);
+      
+      if (!stayOnTab) {
+        setActiveTab('list'); 
+      }
+    } catch (error) {
+      setToastMessage("Failed to add item.");
+    }
   };
   
   const listTabItems = items;
   const cartTabItems = items.filter(item => item.inCart);
+
+  // Check for stale cart items upon window focus
+  useEffect(() => {
+    const checkStaleItems = () => {
+      if (cartTabItems.length === 0 || hasDismissedReminder) {
+        setShowStaleCartWarning(false);
+        return;
+      }
+      
+      const THREE_HOURS_MS = 10800000; 
+      const now = Date.now();
+      
+      const hasStale = cartTabItems.some(item => {
+        if (!item.cartedAt) return false;
+        return (now - new Date(item.cartedAt).getTime()) >= THREE_HOURS_MS;
+      });
+      
+      setShowStaleCartWarning(hasStale);
+    };
+
+    checkStaleItems();
+    
+    window.addEventListener('focus', checkStaleItems);
+    return () => window.removeEventListener('focus', checkStaleItems);
+  }, [cartTabItems, hasDismissedReminder]);
 
   const groupedByStore = listTabItems.reduce((groups, item) => {
     const rawStore = item.store?.trim() || 'Other';
@@ -342,10 +433,25 @@ export default function App() {
     return suggestions;
   }, [purchaseHistory, items, dismissedSuggestions]);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f2f9ea]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#176a21] mx-auto"></div>
+          <p className="mt-4 text-[#176a21] font-medium">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Auth />;
+  }
+
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab}>
+    <Layout activeTab={activeTab} setActiveTab={setActiveTab} userEmail={user.email}>
       
-      {cartTabItems.length > 0 && !hasDismissedReminder && (
+      {showStaleCartWarning && (
         <div className="fixed top-4 left-4 right-4 z-50 animate-fade-in">
           <div className="bg-red-50 border-2 border-red-200 rounded-2xl shadow-xl overflow-hidden p-4">
             <div className="flex items-start gap-3">
@@ -384,7 +490,10 @@ export default function App() {
         
         {activeTab === 'list' && (
           <>
-            <AddForm onAddItem={handleAddItem} />
+            <div className="flex flex-col gap-4">
+              <AddItemForm onAddItem={handleAddItem} />
+              <AddForm onAddItem={handleAddItem} />
+            </div>
 
             {suggestedReplenishments.length > 0 && (
               <div className="mb-6 p-4 bg-white/50 backdrop-blur-md border border-primary/10 rounded-2xl shadow-[0_4px_20px_-4px_rgba(23,106,33,0.05)]">
@@ -399,10 +508,10 @@ export default function App() {
                       className="flex items-center bg-transparent rounded-full border border-primary/20 hover:border-primary/50 hover:bg-primary/5 transition-all"
                     >
                       <button 
-                        onClick={() => handleAddFromHabits(item)}
+                        onClick={() => handleAddFromHabits(item, true)}
                         className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-slate-700 whitespace-nowrap"
                       >
-                        <Icon icon={getItemIcon(item.name)} className="text-lg" />
+                        <Icon icon={getItemIcon(item.name, item.category)} className="text-lg" />
                         {item.name}
                         <span className="material-symbols-outlined text-[14px] text-primary/60 ml-0.5">add_circle</span>
                       </button>
@@ -513,13 +622,20 @@ export default function App() {
           </div>
         )}
 
-        {/* UPDATED HABITS TAB */}
         {activeTab === 'habits' && (
           <div className="w-full flex flex-col gap-8 pb-24 animate-fade-in">
             <section>
               <div className="flex flex-col gap-4 mb-6">
                 <h2 className="text-xl font-headline font-bold text-on-surface">Habits Dashboard</h2>
                 
+                <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                  <p className="text-sm text-blue-800 leading-relaxed">
+                    <span className="font-bold">How it works:</span> The Habits Dashboard needs at least{" "}
+                    <span className="font-semibold">2 purchases of the same item</span> to calculate your average usage and predict when you'll run out. 
+                    Complete a few shopping trips to start seeing personalized predictions!
+                  </p>
+                </div>
+
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
                   <input 
@@ -543,80 +659,89 @@ export default function App() {
               <div className="flex flex-col gap-3">
                 {habitsDashboardData
                   .filter(habit => habit.name.toLowerCase().includes(habitSearchQuery.toLowerCase().trim()))
-                  .map((habit, index) => (
-                    <div key={`${habit.id}-${index}`} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-                      <div className="flex justify-between items-center mb-5">
-                        <h3 className="font-bold text-slate-800 capitalize">{habit.name}</h3>
-                        
-                        {/* INJECTED INTERACTIVE BUTTON */}
-                        <button 
-                          onClick={() => {
-                            const isAlreadyOnList = listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase());
-                            if (!isAlreadyOnList) {
-                              handleAddFromHabits(habit); 
-                            }
-                          }}
-                          disabled={listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase())}
-                          className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-md transition-all active:scale-95 ${
-                            listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase())
-                              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                              : habit.status === 'Restock Soon' 
-                                ? 'bg-red-100 text-red-700 hover:bg-red-200 shadow-sm' 
-                                : habit.status === 'Need Data'
-                                  ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 shadow-sm'
-                                  : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 shadow-sm'
-                          }`}
-                          aria-label={`Add ${habit.name} to list`}
-                        >
-                          {listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase()) 
-                            ? 'Added to List' 
-                            : habit.status}
+                  .map((habit, index) => {
+                    const isAlreadyOnList = listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase());
+                    
+                    return (
+                      <div key={`${habit.id}-${index}`} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                        <div className="flex justify-between items-center mb-5">
+                          <h3 className="font-bold text-slate-800 capitalize">{habit.name}</h3>
                           
-                          {listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase()) ? (
-                            <span className="material-symbols-outlined text-[16px] font-bold">check</span>
-                          ) : (
-                            <span className="material-symbols-outlined text-[16px] font-bold">add</span>
-                          )}
-                        </button>
-                      </div>
-                      
-                      <div className="grid grid-cols-3 gap-2 text-sm text-slate-600 mb-3">
-                        <div>
-                          <span className="block text-xs text-slate-400">Purchases</span>
-                          <span className="font-medium">{habit.totalPurchases}</span>
+                          <button 
+                            onClick={() => handleAddFromHabits(habit, true)}
+                            disabled={isAlreadyOnList}
+                            className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-md transition-all active:scale-95 ${
+                              isAlreadyOnList
+                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                : habit.status === 'Restock Soon' 
+                                  ? 'bg-red-100 text-red-700 hover:bg-red-200 shadow-sm' 
+                                  : habit.status === 'Need Data'
+                                    ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 shadow-sm'
+                                    : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 shadow-sm'
+                            }`}
+                            aria-label={`Add ${habit.name} to list`}
+                          >
+                            {isAlreadyOnList 
+                              ? 'Added to List' 
+                              : habit.status}
+                            
+                            {isAlreadyOnList ? (
+                              <span className="material-symbols-outlined text-[16px] font-bold">check</span>
+                            ) : (
+                              <span className="material-symbols-outlined text-[16px] font-bold">add</span>
+                            )}
+                          </button>
                         </div>
-                        <div>
-                          <span className="block text-xs text-slate-400">Avg Cycle</span>
-                          <span className="font-medium">{habit.avgIntervalDays ? `${habit.avgIntervalDays}d` : '--'}</span>
+                        
+                        <div className="grid grid-cols-3 gap-2 text-sm text-slate-600 mb-3">
+                          <div>
+                            <span className="block text-xs text-slate-400">Purchases</span>
+                            <span className="font-medium">{habit.totalPurchases}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs text-slate-400">Avg Cycle</span>
+                            <span className="font-medium">{habit.avgIntervalDays ? `${habit.avgIntervalDays}d` : '--'}</span>
+                          </div>
+                          <div>
+                            <span className="block text-xs text-slate-400">Last Bought</span>
+                            <span className="font-medium">{habit.daysSinceLast !== null ? `${habit.daysSinceLast}d ago` : '--'}</span>
+                          </div>
                         </div>
-                        <div>
-                          <span className="block text-xs text-slate-400">Last Bought</span>
-                          <span className="font-medium">{habit.daysSinceLast !== null ? `${habit.daysSinceLast}d ago` : '--'}</span>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center gap-1.5 pt-3 border-t border-slate-100 mt-2">
-                        <span className="text-xs text-slate-400">Last bought from:</span>
-                        <span className="text-xs font-medium text-slate-700 capitalize">
-                          {habit.lastPurchasedStore}
-                        </span>
+                        <div className="flex items-center gap-1.5 pt-3 border-t border-slate-100 mt-2">
+                          <span className="text-xs text-slate-400">Last bought from:</span>
+                          <span className="text-xs font-medium text-slate-700 capitalize">
+                            {habit.lastPurchasedStore}
+                          </span>
+                        </div>
+                        
+                        <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full transition-all ${
+                              habit.status === 'Restock Soon' ? 'bg-red-500' : 
+                              habit.status === 'Need Data' ? 'bg-amber-400' : 
+                              'bg-emerald-500'
+                            }`}
+                            style={{ width: `${habit.progressPercent}%` }}
+                          />
+                        </div>
                       </div>
-                      
-                      <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full transition-all ${
-                            habit.status === 'Restock Soon' ? 'bg-red-500' : 
-                            habit.status === 'Need Data' ? 'bg-amber-400' : 
-                            'bg-emerald-500'
-                          }`}
-                          style={{ width: `${habit.progressPercent}%` }}
-                        />
-                      </div>
-                    </div>
-                ))}
+                    );
+                  })}
                 
                 {habitsDashboardData.length === 0 && (
-                  <p className="text-sm text-on-surface-variant text-center py-8">Complete a purchase to generate habit data.</p>
+                  <div className="text-center py-12 px-6 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <span className="material-symbols-outlined text-3xl text-slate-400">monitoring</span>
+                    </div>
+                    <h3 className="font-bold text-slate-800 mb-2">No habit data yet</h3>
+                    <p className="text-sm text-slate-600 mb-4">
+                      Complete your first purchase to start tracking your grocery habits.
+                    </p>
+                    <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg inline-block">
+                       <span className="font-semibold">Tip:</span> You need at least 2 purchases of the same item to see predictions.
+                    </p>
+                  </div>
                 )}
                 
                 {habitsDashboardData.length > 0 && 

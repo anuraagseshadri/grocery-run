@@ -1,1 +1,5 @@
 node_modules
+
+# Firebase Functions build artifacts
+functions/node_modules/
+functions/lib/
