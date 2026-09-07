@@ -6,12 +6,12 @@ import { LuCheck, LuTrash2, LuUndo } from 'react-icons/lu';
 // 1. DYNAMIC UI MAPPING: The UI now decides what icon to show based purely on the category string.
 const getCategoryIcon = (category?: string) => {
   switch(category?.trim()) {
-    case 'Produce': return 'eco';    case 'Dairy & Eggs': return 'water_drop';
+    case 'Produce': return 'eco';
+    case 'Dairy & Eggs': return 'water_drop';
     case 'Meat & Seafood': return 'set_meal';
-    case 'Pantry': return 'inventory_2';
     case 'Bakery': return 'bakery_dining';
     case 'Frozen': return 'ac_unit';
-    case 'Beverages': return 'local_drink';
+    case 'Drinks & Beverages': return 'local_drink'; // Fixed string match
     case 'Household & Cleaning': return 'cleaning_services';
     case 'Pharmacy & Personal Care': return 'medical_services';
     case 'Dessert & Snacks': return 'cookie';
@@ -19,6 +19,8 @@ const getCategoryIcon = (category?: string) => {
     case 'Pasta & Noodles': return 'ramen_dining'; 
     case 'Breakfast & Cereal': return 'breakfast_dining'; 
     case 'Cooking Essentials': return 'soup_kitchen'; 
+    case 'Baby': return 'child_care'; // Added missing Baby category
+    case 'General': return 'shopping_bag';
     default: return 'shopping_bag';
   }
 };
@@ -29,7 +31,6 @@ interface ItemCardProps {
   inCart: boolean;
   viewMode?: string; 
   category?: string;
-  // Note: 'icon' has been completely removed from this interface!
   onToggleCart: (id: any, inCart: boolean) => void;
   onDelete: (id: any) => void;
   onEdit?: (id: any) => void;
@@ -76,7 +77,7 @@ export function ItemCard({
           <div className={`text-2xl shrink-0 transition-all ${
             isListMode && inCart ? 'grayscale opacity-50' : 'text-primary'
           }`}>
-            <Icon icon={getItemIcon(name)} />
+            <Icon icon={getItemIcon(name, category)} />
           </div>
           
           {/* Item Name */}
@@ -102,7 +103,6 @@ export function ItemCard({
                isListMode && inCart ? 'opacity-50 grayscale' : ''
             } ${getCategoryBgColor(category)}`}>
               
-              {/* 2. IMPLEMENTATION: The icon is now dynamically generated on the fly */}
               <span className="material-symbols-outlined text-[14px] leading-none">
                 {getCategoryIcon(category)}
               </span>

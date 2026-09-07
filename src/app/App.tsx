@@ -167,11 +167,13 @@ export default function App() {
     }
   };
 
-  const handleToggleCart = async (id: string, currentState: boolean) => {
-    await updateDoc(doc(db, 'items', id), { inCart: !currentState });
-    setToastMessage(!currentState ? "Moved to Cart" : "Moved back to List");
-    setHasDismissedReminder(true);
-  };
+const handleToggleCart = async (id: string, currentState: boolean) => {
+  await updateDoc(doc(db, 'items', id), { inCart: !currentState });
+  setToastMessage(!currentState ? "Moved to Cart" : "Moved back to List");
+  
+  // Resets the dismissal state so the banner can trigger again
+  setHasDismissedReminder(false); 
+};
 
   const handleDeleteItem = async (id: string) => {
     await deleteDoc(doc(db, 'items', id));
