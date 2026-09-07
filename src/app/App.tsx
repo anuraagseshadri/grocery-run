@@ -276,7 +276,7 @@ export default function App() {
         return;
       }
       
-      const THREE_HOURS_MS = 10800000; 
+      const THREE_HOURS_MS = 1000; 
       const now = Date.now();
       
       const hasStale = cartTabItems.some(item => {
