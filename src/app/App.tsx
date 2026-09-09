@@ -25,16 +25,23 @@ interface GroceryItem {
   createdAt?: string;
   userId?: string;
   cartedAt?: string | null;
+  trackHabit?: boolean;
 }
 
+// MATHEMATICAL STEMMER: Normalizes plurals for the analytics engine
+const normalizeItemName = (name: string) => {
+  let n = name.trim().toLowerCase();
+  if (n.endsWith('ies')) return n.slice(0, -3) + 'y'; 
+  if (n.endsWith('oes')) return n.slice(0, -2);       
+  if (n.endsWith('s') && !n.endsWith('ss')) return n.slice(0, -1); 
+  return n;
+};
+
 const isDuplicateItem = (newItem: string, existingItem: string) => {
-  const a = newItem.trim().toLowerCase();
-  const b = existingItem.trim().toLowerCase();
+  const a = normalizeItemName(newItem);
+  const b = normalizeItemName(existingItem);
 
   if (a === b) return true;
-  if (a + 's' === b || b + 's' === a) return true;
-  if (a + 'es' === b || b + 'es' === a) return true;
-  if (a.replace(/y$/, 'ies') === b || b.replace(/y$/, 'ies') === a) return true;
 
   const synonyms = [
     ['coriander', 'cilantro'],
@@ -71,7 +78,10 @@ export default function App() {
   const [showStaleCartWarning, setShowStaleCartWarning] = useState(false);
 
   const [habitSearchQuery, setHabitSearchQuery] = useState('');
+  const [habitTab, setHabitTab] = useState<'tracked' | 'untracked'>('tracked');
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
+  
+  const [trackingOverrides, setTrackingOverrides] = useState<Record<string, boolean>>({});
 
   const [hasDismissedReminder, setHasDismissedReminderState] = useState(() => {
     return sessionStorage.getItem('cartReminderDismissed') === 'true';
@@ -94,17 +104,14 @@ export default function App() {
     });
   };
 
-  // Listen for auth state changes
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
     });
-
     return () => unsubscribeAuth();
   }, []);
 
-  // Listen to user's items only when logged in
   useEffect(() => {
     if (!user) {
       setItems([]);
@@ -137,7 +144,7 @@ export default function App() {
   const handleAddItem = async (newItemName: string) => {
     if (!user) return;
     
-    const nameKey = newItemName.toLowerCase().trim();
+    const nameKey = normalizeItemName(newItemName);
     const existingMatch = items.find(item => isDuplicateItem(newItemName, item.name));
 
     if (existingMatch) {
@@ -146,21 +153,31 @@ export default function App() {
     }
 
     let learnedCat = null;
+    let learnedTrackHabit = true; 
+    let learnedStore = null; 
     try {
       const prefRef = doc(db, 'preferences', nameKey);
       const prefSnap = await getDoc(prefRef);
-      learnedCat = prefSnap.exists() ? prefSnap.data().category : null;
+      if (prefSnap.exists()) {
+        const data = prefSnap.data();
+        learnedCat = data.category;
+        learnedStore = data.lastPurchasedStore; 
+        if (data.trackHabit !== undefined) {
+          learnedTrackHabit = data.trackHabit;
+        }
+      }
     } catch (error) {
       console.warn("Database read failed. Defaulting to auto-tagger.");
     }
     
-    const { category: autoCat, store } = autoTagItem(newItemName);
+    const { category: autoCat, store: autoStore } = autoTagItem(newItemName);
     try {
       await addDoc(collection(db, 'items'), {
         name: newItemName.trim(),
         category: learnedCat || autoCat, 
-        store,
+        store: learnedStore || autoStore, 
         inCart: false, 
+        trackHabit: learnedTrackHabit,
         userId: user.uid,
         createdAt: new Date().toISOString()
       });
@@ -171,16 +188,13 @@ export default function App() {
 
   const handleToggleCart = async (id: string, currentState: boolean) => {
     const payload: Partial<GroceryItem> = { inCart: !currentState };
-    
     if (!currentState) {
       payload.cartedAt = new Date().toISOString();
     } else {
       payload.cartedAt = null; 
     }
-
     await updateDoc(doc(db, 'items', id), payload);
     setToastMessage(!currentState ? "Moved to Cart" : "Moved back to List");
-    
     setHasDismissedReminder(false); 
   };
 
@@ -189,19 +203,32 @@ export default function App() {
   };
 
   const handleUpdateItem = async (id: string, updates: Partial<GroceryItem>) => {
-    if (updates.category && updates.name) {
-      const nameKey = updates.name.toLowerCase().trim();
-      await setDoc(doc(db, 'preferences', nameKey), {
-        category: updates.category,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+    if (updates.name) {
+      const nameKey = normalizeItemName(updates.name);
+      const prefPayload: any = { updatedAt: new Date().toISOString() };
+      if (updates.category) prefPayload.category = updates.category;
+      if (updates.trackHabit !== undefined) prefPayload.trackHabit = updates.trackHabit;
+      await setDoc(doc(db, 'preferences', nameKey), prefPayload, { merge: true });
     }
     await updateDoc(doc(db, 'items', id), updates);
     setEditingItem(null); 
   };
 
+  const handleToggleTracking = async (itemName: string, newTrackState: boolean) => {
+    const nameKey = normalizeItemName(itemName);
+    
+    setTrackingOverrides(prev => ({ ...prev, [nameKey]: newTrackState }));
+
+    await setDoc(doc(db, 'preferences', nameKey), {
+      trackHabit: newTrackState,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    
+    setToastMessage(newTrackState ? `${itemName} is now being tracked!` : `${itemName} is no longer being tracked.`);
+  };
+
   const handleForgetPreference = async (name: string) => {
-    const nameKey = name.toLowerCase().trim();
+    const nameKey = normalizeItemName(name);
     await deleteDoc(doc(db, 'preferences', nameKey));
     setToastMessage(`Reset default categorization for ${name}`);
     setEditingItem(null);
@@ -209,7 +236,6 @@ export default function App() {
 
   const handleCompletePurchase = async () => {
     if (!user) return;
-    
     const cartItems = items.filter(item => item.inCart);
     const checkoutTime = new Date().toISOString();
 
@@ -220,46 +246,43 @@ export default function App() {
     });
 
     for (const item of cartItems) {
-      const nameKey = item.name.toLowerCase().trim();
-      await setDoc(doc(db, 'preferences', nameKey), {
+      const nameKey = normalizeItemName(item.name);
+      const prefPayload: any = {
         lastPurchasedDate: checkoutTime,
         lastPurchasedStore: item.store || 'Unknown',
         updatedAt: checkoutTime
-      }, { merge: true });
+      };
+      if (item.trackHabit !== undefined) {
+        prefPayload.trackHabit = item.trackHabit;
+      }
+      await setDoc(doc(db, 'preferences', nameKey), prefPayload, { merge: true });
       await deleteDoc(doc(db, 'items', item.id));
     }
     
     setHasDismissedReminder(false);
-    
-    const itemCount = cartItems.length;
-    setToastMessage(`Purchase complete. Your ${itemCount === 1 ? "item is" : "items are"} now tracked in Habits.`);
+    setToastMessage(`Purchase complete. Items logged to history.`);
     setActiveTab('habits');
   };
 
   const handleAddFromHabits = async (habit: any, stayOnTab: boolean = false) => {
     if (!user) return;
-    
-    const alreadyOnList = items.some(i => i.name.toLowerCase() === habit.name.toLowerCase());
+    const alreadyOnList = items.some(i => normalizeItemName(i.name) === normalizeItemName(habit.name));
     if (alreadyOnList) {
       setToastMessage(`${habit.name} is already on your list`);
       return;
     }
-
     try {
       await addDoc(collection(db, 'items'), {
         name: habit.name, 
         category: habit.category, 
         store: habit.store,
+        trackHabit: habit.trackHabit !== false,
         userId: user.uid,
         inCart: false, 
         createdAt: new Date().toISOString()
       });
-      
       setToastMessage(`Added ${habit.name} to List`);
-      
-      if (!stayOnTab) {
-        setActiveTab('list'); 
-      }
+      if (!stayOnTab) setActiveTab('list'); 
     } catch (error) {
       setToastMessage("Failed to add item.");
     }
@@ -268,27 +291,22 @@ export default function App() {
   const listTabItems = items;
   const cartTabItems = items.filter(item => item.inCart);
 
-  // Check for stale cart items upon window focus
   useEffect(() => {
     const checkStaleItems = () => {
       if (cartTabItems.length === 0 || hasDismissedReminder) {
         setShowStaleCartWarning(false);
         return;
       }
-      
       const THREE_HOURS_MS = 10800000; 
       const now = Date.now();
-      
       const hasStale = cartTabItems.some(item => {
         if (!item.cartedAt) return false;
         return (now - new Date(item.cartedAt).getTime()) >= THREE_HOURS_MS;
       });
-      
       setShowStaleCartWarning(hasStale);
     };
 
     checkStaleItems();
-    
     window.addEventListener('focus', checkStaleItems);
     return () => window.removeEventListener('focus', checkStaleItems);
   }, [cartTabItems, hasDismissedReminder]);
@@ -306,22 +324,31 @@ export default function App() {
   }, {} as Record<string, GroceryItem[]>);
 
   const habitsDashboardData = useMemo(() => {
-    const itemHistory: Record<string, { itemData: GroceryItem, history: {date: number, store: string}[], count: number }> = {};
+    const itemHistory: Record<string, { itemData: GroceryItem, history: {date: number, store: string}[], count: number, isTracked: boolean }> = {};
     
     purchaseHistory.forEach(order => {
       if (!order.date || !order.items) return;
       const orderTime = new Date(order.date).getTime();
 
       order.items.forEach((item: GroceryItem) => {
-        const key = (item.name || '').toLowerCase();
-        if (!itemHistory[key]) {
-          itemHistory[key] = { itemData: item, history: [], count: 0 };
+        const rawNameKey = (item.name || '').toLowerCase();
+        const normalizedKey = normalizeItemName(rawNameKey); 
+        
+        let currentTrackState = item.trackHabit !== false;
+        if (trackingOverrides[rawNameKey] !== undefined) {
+          currentTrackState = trackingOverrides[rawNameKey];
+        } else if (item.trackHabit !== undefined) {
+          currentTrackState = item.trackHabit;
         }
-        itemHistory[key].history.push({ 
-          date: orderTime, 
-          store: item.store || 'Unknown' 
-        });
-        itemHistory[key].count += 1; 
+
+        if (!itemHistory[normalizedKey]) {
+          itemHistory[normalizedKey] = { itemData: item, history: [], count: 0, isTracked: currentTrackState };
+        } else {
+          itemHistory[normalizedKey].isTracked = currentTrackState;
+        }
+        
+        itemHistory[normalizedKey].history.push({ date: orderTime, store: item.store || 'Unknown' });
+        itemHistory[normalizedKey].count += 1; 
       });
     });
 
@@ -334,8 +361,10 @@ export default function App() {
       let progressPercent = 0;
       let lastPurchasedStore = 'Unknown';
       
-      const itemNameKey = record.itemData.name.toLowerCase();
-      let effectiveInterval = DEFAULT_VELOCITY[itemNameKey] || null;
+      const rawNameKey = record.itemData.name.toLowerCase();
+      const itemNameKey = normalizeItemName(rawNameKey);
+      
+      let effectiveInterval = DEFAULT_VELOCITY[itemNameKey] || DEFAULT_VELOCITY[rawNameKey] || null;
 
       if (record.history.length >= 2) {
         const sortedHistory = [...record.history].sort((a, b) => a.date - b.date);
@@ -349,10 +378,8 @@ export default function App() {
       if (record.history.length > 0) {
         const sortedHistory = [...record.history].sort((a, b) => a.date - b.date);
         const lastPurchase = sortedHistory[sortedHistory.length - 1];
-        
         lastPurchasedStore = lastPurchase.store;
         daysSinceLast = (now - lastPurchase.date) / MS_PER_DAY;
-        
         if (effectiveInterval) {
           progressPercent = Math.min((daysSinceLast / effectiveInterval) * 100, 100);
           if (daysSinceLast >= (effectiveInterval * 0.9)) {
@@ -365,6 +392,7 @@ export default function App() {
 
       return {
         ...record.itemData,
+        trackHabit: record.isTracked,
         totalPurchases: record.count,
         avgIntervalDays: effectiveInterval ? Math.round(effectiveInterval) : null,
         daysSinceLast: daysSinceLast !== null ? Math.round(daysSinceLast) : null,
@@ -379,21 +407,35 @@ export default function App() {
       if (b.status === 'Restock Soon' && a.status !== 'Restock Soon') return 1;
       return b.progressPercent - a.progressPercent;
     });
-  }, [purchaseHistory]);
+  }, [purchaseHistory, trackingOverrides]);
+
+  const trackedHabits = habitsDashboardData.filter(item => item.trackHabit !== false);
+  const untrackedHabits = habitsDashboardData.filter(item => item.trackHabit === false);
+  const activeHabitsList = habitTab === 'tracked' ? trackedHabits : untrackedHabits;
 
   const suggestedReplenishments = useMemo(() => {
-    const itemHistory: Record<string, { itemData: GroceryItem, dates: number[] }> = {};
+    const itemHistory: Record<string, { itemData: GroceryItem, dates: number[], isTracked: boolean }> = {};
     
     purchaseHistory.forEach(order => {
       if (!order.date || !order.items) return;
       const orderTime = new Date(order.date).getTime(); 
-      
       order.items.forEach((item: GroceryItem) => {
-        const key = (item.name || '').toLowerCase();
-        if (!itemHistory[key]) {
-          itemHistory[key] = { itemData: item, dates: [] };
+        const rawNameKey = (item.name || '').toLowerCase();
+        const normalizedKey = normalizeItemName(rawNameKey); 
+        
+        let currentTrackState = item.trackHabit !== false;
+        if (trackingOverrides[rawNameKey] !== undefined) {
+          currentTrackState = trackingOverrides[rawNameKey];
+        } else if (item.trackHabit !== undefined) {
+          currentTrackState = item.trackHabit;
         }
-        itemHistory[key].dates.push(orderTime);
+
+        if (!itemHistory[normalizedKey]) {
+          itemHistory[normalizedKey] = { itemData: item, dates: [], isTracked: currentTrackState };
+        } else {
+          itemHistory[normalizedKey].isTracked = currentTrackState;
+        }
+        itemHistory[normalizedKey].dates.push(orderTime);
       });
     });
 
@@ -402,12 +444,14 @@ export default function App() {
     const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
     Object.values(itemHistory).forEach(record => {
-      const itemNameKey = record.itemData.name.toLowerCase();
+      if (!record.isTracked) return; 
       
-      if (dismissedSuggestions.has(itemNameKey)) return;
+      const rawNameKey = record.itemData.name.toLowerCase();
+      const itemNameKey = normalizeItemName(rawNameKey);
+      if (dismissedSuggestions.has(rawNameKey) || dismissedSuggestions.has(itemNameKey)) return;
 
-      let effectiveInterval = DEFAULT_VELOCITY[itemNameKey] || null;
-
+      let effectiveInterval = DEFAULT_VELOCITY[itemNameKey] || DEFAULT_VELOCITY[rawNameKey] || null;
+      
       if (record.dates.length >= 2) {
         const sortedDates = [...record.dates].sort((a, b) => a - b);
         let totalIntervalMs = 0;
@@ -423,7 +467,7 @@ export default function App() {
         const lastPurchaseTime = sortedDates[sortedDates.length - 1];
         const daysSinceLast = (now - lastPurchaseTime) / MS_PER_DAY;
         if (daysSinceLast >= (effectiveInterval * 0.9) && daysSinceLast > 2) {
-          const alreadyOnList = items.some(i => i.name.toLowerCase() === record.itemData.name.toLowerCase());
+          const alreadyOnList = items.some(i => normalizeItemName(i.name) === normalizeItemName(record.itemData.name));
           if (!alreadyOnList) {
             suggestions.push(record.itemData);
           }
@@ -431,7 +475,7 @@ export default function App() {
       }
     });
     return suggestions;
-  }, [purchaseHistory, items, dismissedSuggestions]);
+  }, [purchaseHistory, items, dismissedSuggestions, trackingOverrides]);
 
   if (loading) {
     return (
@@ -486,7 +530,7 @@ export default function App() {
         </div>
       )}
 
-      <div className="w-full flex flex-col gap-6 pb-20 mt-4">
+      <div className="w-full flex flex-col gap-6 mt-4">
         
         {activeTab === 'list' && (
           <>
@@ -555,7 +599,7 @@ export default function App() {
                     </div>
                   ) : (
                     <div className={`flex items-center px-4 py-3 rounded-xl border shadow-sm font-headline font-bold uppercase tracking-wider text-sm ${officialStore?.color || 'bg-white text-slate-600 border-slate-200'}`}>
-                      {officialStore?.logo || storeName}
+                      <span>{officialStore?.name || storeName || 'Other'}</span>
                       <div className="ml-auto bg-black/5 px-2.5 py-1 rounded-md flex items-center justify-center">
                         <span className="text-xs font-bold">{itemsInStore.length}</span>
                       </div>
@@ -583,6 +627,7 @@ export default function App() {
                             category={item.category || 'Unknown'} 
                             inCart={item.inCart} 
                             viewMode="list" 
+                            trackHabit={item.trackHabit}
                             onToggleCart={handleToggleCart} 
                             onDelete={handleDeleteItem} 
                             onEdit={() => setEditingItem(item)} 
@@ -608,6 +653,7 @@ export default function App() {
                 category={item.category || 'Unknown'} 
                 inCart={item.inCart} 
                 viewMode="cart" 
+                trackHabit={item.trackHabit}
                 onToggleCart={handleToggleCart} 
                 onDelete={handleDeleteItem} 
               />
@@ -623,24 +669,59 @@ export default function App() {
         )}
 
         {activeTab === 'habits' && (
-          <div className="w-full flex flex-col gap-8 pb-24 animate-fade-in">
+          <div className="w-full flex flex-col gap-8 animate-fade-in">
             <section>
               <div className="flex flex-col gap-4 mb-6">
-                <h2 className="text-xl font-headline font-bold text-on-surface">Habits Dashboard</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-headline font-bold text-on-surface">Habits Dashboard</h2>
+                </div>
                 
-                <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl">
-                  <p className="text-sm text-blue-800 leading-relaxed">
-                    <span className="font-bold">How it works:</span> The Habits Dashboard needs at least{" "}
-                    <span className="font-semibold">2 purchases of the same item</span> to calculate your average usage and predict when you'll run out. 
-                    Complete a few shopping trips to start seeing personalized predictions!
-                  </p>
+                <div className="flex p-1 bg-white rounded-xl shadow-sm mb-2">
+                  <button 
+                    onClick={() => setHabitTab('tracked')}
+                    className={`flex-1 py-2 text-center rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      habitTab === 'tracked' ? 'bg-[#eaf3ea] text-[#1b3d2b] shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    <span>Tracked Items</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${habitTab === 'tracked' ? 'bg-[#7d9d7c]/20 text-[#1b3d2b]' : 'bg-slate-100 text-slate-500'}`}>
+                      {trackedHabits.length}
+                    </span>
+                  </button>
+                  <button 
+                    onClick={() => setHabitTab('untracked')}
+                    className={`flex-1 py-2 text-center rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      habitTab === 'untracked' ? 'bg-[#eaf3ea] text-[#1b3d2b] shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    <span>Untracked items</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${habitTab === 'untracked' ? 'bg-[#7d9d7c]/20 text-[#1b3d2b]' : 'bg-slate-100 text-slate-500'}`}>
+                      {untrackedHabits.length}
+                    </span>
+                  </button>
                 </div>
 
-                <div className="relative">
+                {habitTab === 'tracked' ? (
+                  <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-3">
+                    <span className="material-symbols-outlined text-blue-700 text-[20px] mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+                    <p className="text-sm text-blue-800 leading-relaxed">
+                      <span className="font-bold">How it works:</span> Habits predicts when you run out based on past purchases. Only items you choose to track appear here!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-3">
+                    <span className="material-symbols-outlined text-blue-700 text-[20px] mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>info</span>
+                    <p className="text-sm text-blue-800 leading-relaxed">
+                      These untracked items will not trigger restock recommendations. You can start tracking them anytime by tapping Track Item.
+                    </p>
+                  </div>
+                )}
+
+                <div className="relative mt-2">
                   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
                   <input 
                     type="text"
-                    placeholder="Find item history..."
+                    placeholder={habitTab === 'tracked' ? "Find tracked item..." : "Find untracked items..."}
                     value={habitSearchQuery}
                     onChange={(e) => setHabitSearchQuery(e.target.value)}
                     className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow"
@@ -657,99 +738,137 @@ export default function App() {
               </div>
 
               <div className="flex flex-col gap-3">
-                {habitsDashboardData
+                {activeHabitsList
                   .filter(habit => habit.name.toLowerCase().includes(habitSearchQuery.toLowerCase().trim()))
                   .map((habit, index) => {
-                    const isAlreadyOnList = listTabItems.some(i => i.name.toLowerCase() === habit.name.toLowerCase());
+                    const isAlreadyOnList = listTabItems.some(i => normalizeItemName(i.name) === normalizeItemName(habit.name));
                     
                     return (
                       <div key={`${habit.id}-${index}`} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-                        <div className="flex justify-between items-center mb-5">
-                          <h3 className="font-bold text-slate-800 capitalize">{habit.name}</h3>
-                          
-                          <button 
-                            onClick={() => handleAddFromHabits(habit, true)}
-                            disabled={isAlreadyOnList}
-                            className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-md transition-all active:scale-95 ${
-                              isAlreadyOnList
-                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                : habit.status === 'Restock Soon' 
-                                  ? 'bg-red-100 text-red-700 hover:bg-red-200 shadow-sm' 
-                                  : habit.status === 'Need Data'
-                                    ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 shadow-sm'
-                                    : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 shadow-sm'
-                            }`}
-                            aria-label={`Add ${habit.name} to list`}
-                          >
-                            {isAlreadyOnList 
-                              ? 'Added to List' 
-                              : habit.status}
-                            
-                            {isAlreadyOnList ? (
-                              <span className="material-symbols-outlined text-[16px] font-bold">check</span>
-                            ) : (
-                              <span className="material-symbols-outlined text-[16px] font-bold">add</span>
-                            )}
-                          </button>
-                        </div>
                         
-                        <div className="grid grid-cols-3 gap-2 text-sm text-slate-600 mb-3">
-                          <div>
-                            <span className="block text-xs text-slate-400">Purchases</span>
-                            <span className="font-medium">{habit.totalPurchases}</span>
+                        {habitTab === 'tracked' ? (
+                          <div className="flex justify-between items-center mb-5">
+                            <h3 className="font-bold text-slate-800 capitalize flex items-center gap-2 flex-1 min-w-0 pr-3">
+                              <Icon icon={getItemIcon(habit.name, habit.category)} className="text-xl shrink-0" />
+                              <span className="break-words leading-tight">{habit.name}</span>
+                            </h3>
+                            <button 
+                              onClick={() => handleAddFromHabits(habit, true)}
+                              disabled={isAlreadyOnList}
+                              className={`flex items-center gap-1 text-xs font-bold px-3.5 py-1.5 rounded-full transition-all active:scale-95 shrink-0 ${
+                                isAlreadyOnList
+                                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                  : habit.status === 'Restock Soon' 
+                                    ? 'bg-[#FFE4E6] text-[#BE123C] hover:bg-rose-100 shadow-sm' 
+                                    : 'bg-[#DCEDE0] text-[#1b3d2b] hover:bg-[#c2d6cb] shadow-sm'
+                              }`}
+                            >
+                              {isAlreadyOnList ? 'Added to List' : 'Restock Soon'}
+                              <span className="material-symbols-outlined text-[16px] font-bold">
+                                {isAlreadyOnList ? 'check' : 'add'}
+                              </span>
+                            </button>
                           </div>
-                          <div>
-                            <span className="block text-xs text-slate-400">Avg Cycle</span>
-                            <span className="font-medium">{habit.avgIntervalDays ? `${habit.avgIntervalDays}d` : '--'}</span>
+                        ) : (
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
+                            <h3 className="font-bold text-slate-800 capitalize flex items-center gap-2 flex-1 min-w-0 pr-3 mb-2 sm:mb-0">
+                              <Icon icon={getItemIcon(habit.name, habit.category)} className="text-xl shrink-0" />
+                              <span className="break-words leading-tight">{habit.name}</span>
+                            </h3>
+                            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                              <button 
+                                onClick={() => handleAddFromHabits(habit, true)}
+                                disabled={isAlreadyOnList}
+                                className={`flex-1 sm:flex-none flex items-center justify-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full transition-all active:scale-95 ${
+                                  isAlreadyOnList ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                }`}
+                              >
+                                {isAlreadyOnList ? 'Added' : 'Add to List'}
+                                <span className="material-symbols-outlined text-[16px] font-bold">{isAlreadyOnList ? 'check' : 'add'}</span>
+                              </button>
+                              <button 
+                                onClick={() => handleToggleTracking(habit.name, true)}
+                                className="flex-1 sm:flex-none flex items-center justify-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full bg-[#15803D] text-white shadow-md hover:bg-[#006d30] active:scale-95 transition-all"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">sync</span>
+                                Track
+                              </button>
+                            </div>
                           </div>
+                        )}
+                        
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm text-slate-600 mb-3">
                           <div>
-                            <span className="block text-xs text-slate-400">Last Bought</span>
-                            <span className="font-medium">{habit.daysSinceLast !== null ? `${habit.daysSinceLast}d ago` : '--'}</span>
+                            <span className="block text-[10px] uppercase tracking-wider font-bold text-slate-400">Purchases</span>
+                            <span className="font-bold text-slate-800 text-lg">{habit.totalPurchases}</span>
+                          </div>
+                          {habitTab === 'tracked' && (
+                            <div>
+                              <span className="block text-[10px] uppercase tracking-wider font-bold text-slate-400">Avg Cycle</span>
+                              <span className="font-bold text-slate-800 text-lg">{habit.avgIntervalDays ? `${habit.avgIntervalDays}d` : '--'}</span>
+                            </div>
+                          )}
+                          <div>
+                            <span className="block text-[10px] uppercase tracking-wider font-bold text-slate-400">Last Bought</span>
+                            <span className="font-bold text-slate-800 text-lg">{habit.daysSinceLast !== null ? `${habit.daysSinceLast}d ago` : '--'}</span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5 pt-3 border-t border-slate-100 mt-2">
-                          <span className="text-xs text-slate-400">Last bought from:</span>
-                          <span className="text-xs font-medium text-slate-700 capitalize">
-                            {habit.lastPurchasedStore}
-                          </span>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3 border-t border-slate-100 mt-2">
+                          <div className="flex items-center flex-wrap gap-1.5">
+                            <span className="text-xs text-slate-400">Last bought from:</span>
+                            <span className="text-xs font-bold text-slate-700 capitalize">
+                              {habit.lastPurchasedStore}
+                            </span>
+                          </div>
+                          
+                          {habitTab === 'untracked' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 self-start sm:self-auto">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                              Not tracked
+                            </span>
+                          )}
                         </div>
                         
-                        <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full transition-all ${
-                              habit.status === 'Restock Soon' ? 'bg-red-500' : 
-                              habit.status === 'Need Data' ? 'bg-amber-400' : 
-                              'bg-emerald-500'
-                            }`}
-                            style={{ width: `${habit.progressPercent}%` }}
-                          />
-                        </div>
+                        {habitTab === 'tracked' && (
+                          <>
+                            <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full transition-all ${
+                                  habit.status === 'Restock Soon' ? 'bg-[#EF4444]' : 
+                                  habit.status === 'Need Data' ? 'bg-amber-400' : 
+                                  'bg-emerald-500'
+                                }`}
+                                style={{ width: `${habit.progressPercent}%` }}
+                              />
+                            </div>
+                            <div className="flex justify-end mt-2">
+                              <button 
+                                onClick={() => handleToggleTracking(habit.name, false)}
+                                className="text-slate-400 hover:text-slate-600 font-semibold text-xs flex items-center gap-1 transition-colors px-2 py-1 rounded"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">do_not_disturb_on</span>
+                                Stop tracking (move to untracked)
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     );
                   })}
                 
-                {habitsDashboardData.length === 0 && (
+                {activeHabitsList.length === 0 && (
                   <div className="text-center py-12 px-6 bg-white border border-slate-200 rounded-xl shadow-sm">
                     <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                       <span className="material-symbols-outlined text-3xl text-slate-400">monitoring</span>
                     </div>
-                    <h3 className="font-bold text-slate-800 mb-2">No habit data yet</h3>
+                    <h3 className="font-bold text-slate-800 mb-2">No data yet</h3>
                     <p className="text-sm text-slate-600 mb-4">
-                      Complete your first purchase to start tracking your grocery habits.
-                    </p>
-                    <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg inline-block">
-                       <span className="font-semibold">Tip:</span> You need at least 2 purchases of the same item to see predictions.
+                      {habitTab === 'tracked' 
+                        ? "Complete your first purchase to start tracking your grocery habits."
+                        : "You don't have any untracked items yet."}
                     </p>
                   </div>
-                )}
-                
-                {habitsDashboardData.length > 0 && 
-                 habitSearchQuery && 
-                 habitsDashboardData.filter(h => h.name.toLowerCase().includes(habitSearchQuery.toLowerCase().trim())).length === 0 && (
-                  <p className="text-sm text-slate-500 text-center py-8 bg-white border border-slate-200 rounded-xl shadow-sm">
-                    No purchase history found for "{habitSearchQuery}"
-                  </p>
                 )}
               </div>
             </section>

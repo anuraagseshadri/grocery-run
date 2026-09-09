@@ -1,6 +1,4 @@
 import { Bell, AlertCircle } from 'lucide-react';
-import { Card } from './ui/card';
-import { Badge } from './ui/badge';
 
 interface Reminder {
   itemName: string;
@@ -19,50 +17,50 @@ export function RemindersPanel({ reminders }: RemindersPanelProps) {
 
   if (reminders.length === 0) {
     return (
-      <Card className="p-6">
+      <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-100">
         <div className="flex items-center gap-2 mb-4">
-          <Bell className="w-5 h-5" />
-          <h2 className="text-lg font-semibold">Reminders</h2>
+          <Bell className="w-5 h-5 text-slate-400" />
+          <h2 className="text-lg font-bold text-slate-800">Reminders</h2>
         </div>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm font-medium text-slate-500">
           You're all stocked up! No reminders at the moment.
         </p>
-      </Card>
+      </div>
     );
   }
 
   return (
-    <Card className="p-6">
+    <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-100">
       <div className="flex items-center gap-2 mb-4">
-        <Bell className="w-5 h-5" />
-        <h2 className="text-lg font-semibold">Reminders</h2>
-        <Badge variant="destructive" className="ml-auto">
+        <Bell className="w-5 h-5 text-slate-800" />
+        <h2 className="text-lg font-bold text-slate-800">Reminders</h2>
+        <span className="ml-auto px-2.5 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-bold">
           {reminders.length}
-        </Badge>
+        </span>
       </div>
 
       <div className="space-y-4">
         {overdueReminders.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-destructive" />
+            <h3 className="text-sm font-bold mb-2 flex items-center gap-2 text-slate-700">
+              <AlertCircle className="w-4 h-4 text-red-500" />
               Likely Running Low
             </h3>
             <div className="space-y-2">
               {overdueReminders.map((reminder, index) => (
                 <div 
                   key={index}
-                  className="flex items-start justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20"
+                  className="flex items-start justify-between p-3 rounded-xl bg-red-50 border border-red-100"
                 >
                   <div>
-                    <p className="font-medium">{reminder.itemName}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="font-bold text-slate-800">{reminder.itemName}</p>
+                    <p className="text-xs font-medium text-slate-500 mt-1">
                       Last purchased {reminder.daysSincePurchase} days ago
                     </p>
                   </div>
-                  <Badge variant="destructive" className="text-xs">
-                    {reminder.daysSincePurchase - reminder.averageDays} days overdue
-                  </Badge>
+                  <span className="px-2 py-1 rounded-md bg-red-100 text-red-700 text-[10px] font-bold uppercase tracking-wider">
+                    {reminder.daysSincePurchase - reminder.averageDays}d overdue
+                  </span>
                 </div>
               ))}
             </div>
@@ -71,31 +69,31 @@ export function RemindersPanel({ reminders }: RemindersPanelProps) {
 
         {dueSoonReminders.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
-              <Bell className="w-4 h-4 text-yellow-500" />
+            <h3 className="text-sm font-bold mb-2 flex items-center gap-2 text-slate-700">
+              <Bell className="w-4 h-4 text-amber-500" />
               Due Soon
             </h3>
             <div className="space-y-2">
               {dueSoonReminders.map((reminder, index) => (
                 <div 
                   key={index}
-                  className="flex items-start justify-between p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20"
+                  className="flex items-start justify-between p-3 rounded-xl bg-amber-50 border border-amber-100"
                 >
                   <div>
-                    <p className="font-medium">{reminder.itemName}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="font-bold text-slate-800">{reminder.itemName}</p>
+                    <p className="text-xs font-medium text-slate-500 mt-1">
                       Last purchased {reminder.daysSincePurchase} days ago
                     </p>
                   </div>
-                  <Badge variant="secondary" className="text-xs">
-                    Due in ~{reminder.averageDays - reminder.daysSincePurchase} days
-                  </Badge>
+                  <span className="px-2 py-1 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold uppercase tracking-wider">
+                    Due in ~{reminder.averageDays - reminder.daysSincePurchase}d
+                  </span>
                 </div>
               ))}
             </div>
           </div>
         )}
       </div>
-    </Card>
+    </div>
   );
 }

@@ -3,7 +3,6 @@ import { Icon } from '@iconify/react';
 import { getItemIcon, getCategoryBgColor } from '../constants';
 import { LuCheck, LuTrash2, LuUndo } from 'react-icons/lu';
 
-// 1. DYNAMIC UI MAPPING: The UI now decides what icon to show based purely on the category string.
 const getCategoryIcon = (category?: string) => {
   switch(category?.trim()) {
     case 'Produce': return 'eco';
@@ -11,7 +10,7 @@ const getCategoryIcon = (category?: string) => {
     case 'Meat & Seafood': return 'set_meal';
     case 'Bakery': return 'bakery_dining';
     case 'Frozen': return 'ac_unit';
-    case 'Drinks & Beverages': return 'local_drink'; // Fixed string match
+    case 'Drinks & Beverages': return 'local_drink';
     case 'Household & Cleaning': return 'cleaning_services';
     case 'Pharmacy & Personal Care': return 'medical_services';
     case 'Dessert & Snacks': return 'cookie';
@@ -19,7 +18,7 @@ const getCategoryIcon = (category?: string) => {
     case 'Pasta & Noodles': return 'ramen_dining'; 
     case 'Breakfast & Cereal': return 'breakfast_dining'; 
     case 'Cooking Essentials': return 'soup_kitchen'; 
-    case 'Baby': return 'child_care'; // Added missing Baby category
+    case 'Baby': return 'child_care'; 
     case 'General': return 'shopping_bag';
     default: return 'shopping_bag';
   }
@@ -31,6 +30,7 @@ interface ItemCardProps {
   inCart: boolean;
   viewMode?: string; 
   category?: string;
+  trackHabit?: boolean; 
   onToggleCart: (id: any, inCart: boolean) => void;
   onDelete: (id: any) => void;
   onEdit?: (id: any) => void;
@@ -42,6 +42,7 @@ export function ItemCard({
   inCart, 
   viewMode, 
   category, 
+  trackHabit, 
   onToggleCart, 
   onDelete, 
   onEdit 
@@ -58,10 +59,9 @@ export function ItemCard({
       
       <div className="flex items-center justify-between gap-2 z-10">
         
-        {/* LEFT SIDE: Checkbox, Icon, and Name */}
+        {/* LEFT SIDE: Checkbox, Icon, Name, and Tracking Badge */}
         <div className="flex items-center gap-3 flex-1 min-w-0">
           
-          {/* Checkbox */}
           {isListMode && (
             <button 
               onClick={() => onToggleCart(id, inCart)}
@@ -73,31 +73,48 @@ export function ItemCard({
             </button>
           )}
 
-          {/* MAIN PRODUCT ICON */}
           <div className={`text-2xl shrink-0 transition-all ${
             isListMode && inCart ? 'grayscale opacity-50' : 'text-primary'
           }`}>
             <Icon icon={getItemIcon(name, category)} />
           </div>
           
-          {/* Item Name */}
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onEdit) onEdit(id);
-            }}
-            className={`text-left font-headline font-semibold hover:text-primary transition-all truncate ${
-              isListMode && inCart ? 'line-through text-slate-400' : 'text-text-main'
-            }`}
-          >
-            {name}
-          </button>
+          {/* VERTICAL STACK: Item Name & Badge */}
+          <div className="flex flex-col flex-1 min-w-0 justify-center">
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onEdit) onEdit(id);
+              }}
+              className={`text-left font-headline font-semibold hover:text-primary transition-all break-words leading-tight ${
+                isListMode && inCart ? 'line-through text-slate-400' : 'text-text-main'
+              }`}
+            >
+              {name}
+            </button>
+
+            {/* TRACKING BADGES: Stacked beneath name */}
+            {isListMode && !inCart && (
+              <div className="mt-0.5">
+                {trackHabit !== false ? (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-[#DCEDE0] text-[#006d30] font-bold text-[9px] cursor-default">
+                    <span className="material-symbols-outlined text-[11px]">sync</span>
+                    Tracked
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-[#FEF3C7] text-amber-800 font-bold text-[9px] cursor-default">
+                    <span className="material-symbols-outlined text-[11px]">bolt</span>
+                    1-Time
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* RIGHT SIDE: Category Tag & Actions */}
         <div className="flex items-center gap-2 shrink-0">
           
-          {/* THE CATEGORY TAG */}
           {isListMode && (
             <div className={`flex items-center gap-1 text-[10px] font-label px-2 py-1 rounded-md border shrink-0 transition-all ${
                isListMode && inCart ? 'opacity-50 grayscale' : ''
@@ -111,7 +128,6 @@ export function ItemCard({
             </div>
           )}
 
-          {/* Delete / Undo Buttons */}
           {isListMode ? (
             <button onClick={() => onDelete(id)} className={`p-2 hover:bg-red-50 rounded-full transition-colors shrink-0 ${
               isListMode && inCart ? 'text-red-300 hover:text-red-500' : 'text-red-400 hover:text-red-600'

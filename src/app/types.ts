@@ -5,6 +5,7 @@ export interface GroceryItem {
   store: string;
   inCart: boolean;
   createdAt?: string;
+  trackHabit?: boolean; // NEW ADDITION: Optional flag for selective habit tracking
 }
 
 export interface PurchaseHistoryRecord {

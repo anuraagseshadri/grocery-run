@@ -77,7 +77,8 @@ export function Layout({ children, activeTab, setActiveTab, userEmail }: LayoutP
         </div>
       </header>
 
-      <main className="px-4 py-6 max-w-2xl mx-auto min-h-screen">
+      {/* FIXED: Replaced standard py-6 with pb-32 to clear the safe-area nav bars completely */}
+      <main className="px-4 pt-6 pb-32 max-w-2xl mx-auto min-h-screen">
         {children}
       </main>
 
