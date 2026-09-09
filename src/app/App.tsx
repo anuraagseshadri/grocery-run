@@ -82,6 +82,7 @@ export default function App() {
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
   
   const [trackingOverrides, setTrackingOverrides] = useState<Record<string, boolean>>({});
+  const [preferences, setPreferences] = useState<Record<string, any>>({});
 
   const [hasDismissedReminder, setHasDismissedReminderState] = useState(() => {
     return sessionStorage.getItem('cartReminderDismissed') === 'true';
@@ -116,6 +117,7 @@ export default function App() {
     if (!user) {
       setItems([]);
       setPurchaseHistory([]);
+      setPreferences({});
       return;
     }
 
@@ -135,9 +137,18 @@ export default function App() {
       }
     );
 
+    const unsubscribePrefs = onSnapshot(collection(db, 'preferences'), (snapshot) => {
+      const prefsObj: Record<string, any> = {};
+      snapshot.docs.forEach(doc => {
+        prefsObj[doc.id] = doc.data();
+      });
+      setPreferences(prefsObj);
+    });
+
     return () => {
       unsubscribeItems();
       unsubscribeHistory();
+      unsubscribePrefs();
     };
   }, [user]);
 
@@ -335,8 +346,10 @@ export default function App() {
         const normalizedKey = normalizeItemName(rawNameKey); 
         
         let currentTrackState = item.trackHabit !== false;
-        if (trackingOverrides[rawNameKey] !== undefined) {
-          currentTrackState = trackingOverrides[rawNameKey];
+        if (trackingOverrides[normalizedKey] !== undefined) {
+          currentTrackState = trackingOverrides[normalizedKey];
+        } else if (preferences[normalizedKey] && preferences[normalizedKey].trackHabit !== undefined) {
+          currentTrackState = preferences[normalizedKey].trackHabit;
         } else if (item.trackHabit !== undefined) {
           currentTrackState = item.trackHabit;
         }
@@ -407,7 +420,7 @@ export default function App() {
       if (b.status === 'Restock Soon' && a.status !== 'Restock Soon') return 1;
       return b.progressPercent - a.progressPercent;
     });
-  }, [purchaseHistory, trackingOverrides]);
+  }, [purchaseHistory, trackingOverrides, preferences]);
 
   const trackedHabits = habitsDashboardData.filter(item => item.trackHabit !== false);
   const untrackedHabits = habitsDashboardData.filter(item => item.trackHabit === false);
@@ -424,8 +437,10 @@ export default function App() {
         const normalizedKey = normalizeItemName(rawNameKey); 
         
         let currentTrackState = item.trackHabit !== false;
-        if (trackingOverrides[rawNameKey] !== undefined) {
-          currentTrackState = trackingOverrides[rawNameKey];
+        if (trackingOverrides[normalizedKey] !== undefined) {
+          currentTrackState = trackingOverrides[normalizedKey];
+        } else if (preferences[normalizedKey] && preferences[normalizedKey].trackHabit !== undefined) {
+          currentTrackState = preferences[normalizedKey].trackHabit;
         } else if (item.trackHabit !== undefined) {
           currentTrackState = item.trackHabit;
         }
@@ -475,7 +490,7 @@ export default function App() {
       }
     });
     return suggestions;
-  }, [purchaseHistory, items, dismissedSuggestions, trackingOverrides]);
+  }, [purchaseHistory, items, dismissedSuggestions, trackingOverrides, preferences]);
 
   if (loading) {
     return (
