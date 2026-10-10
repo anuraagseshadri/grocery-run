@@ -167,7 +167,6 @@ export default function App() {
     let learnedTrackHabit = true; 
     let learnedStore = null; 
     try {
-      // getDoc is safe to await because your new persistentLocalCache resolves it instantly offline
       const prefRef = doc(db, 'preferences', nameKey);
       const prefSnap = await getDoc(prefRef);
       if (prefSnap.exists()) {
@@ -184,7 +183,6 @@ export default function App() {
     
     const { category: autoCat, store: autoStore } = autoTagItem(newItemName);
     
-    // Optimistic UI: Fire and forget the write. Firebase handles the offline queueing.
     addDoc(collection(db, 'items'), {
       name: newItemName.trim(),
       category: learnedCat || autoCat, 
@@ -197,11 +195,9 @@ export default function App() {
   };
 
   const handleToggleCart = (id: string, currentState: boolean) => {
-    // 1. Optimistic UI: Instantly update toast message
     setToastMessage(!currentState ? "Moved to Cart" : "Moved back to List");
     setHasDismissedReminder(false); 
 
-    // 2. Fire and forget database update
     const payload: Partial<GroceryItem> = { inCart: !currentState };
     payload.cartedAt = !currentState ? new Date().toISOString() : null; 
     updateDoc(doc(db, 'items', id), payload);
@@ -212,10 +208,8 @@ export default function App() {
   };
 
   const handleUpdateItem = (id: string, updates: Partial<GroceryItem>) => {
-    // 1. Optimistic UI: Instantly close the modal
     setEditingItem(null); 
 
-    // 2. Fire and forget database updates
     if (updates.name) {
       const nameKey = normalizeItemName(updates.name);
       const prefPayload: any = { updatedAt: new Date().toISOString() };
@@ -229,11 +223,9 @@ export default function App() {
   const handleToggleTracking = (itemName: string, newTrackState: boolean) => {
     const nameKey = normalizeItemName(itemName);
     
-    // 1. Optimistic UI: Instantly update state
     setTrackingOverrides(prev => ({ ...prev, [nameKey]: newTrackState }));
     setToastMessage(newTrackState ? `${itemName} is now being tracked!` : `${itemName} is no longer being tracked.`);
 
-    // 2. Fire and forget
     setDoc(doc(db, 'preferences', nameKey), {
       trackHabit: newTrackState,
       updatedAt: new Date().toISOString()
@@ -243,25 +235,21 @@ export default function App() {
   const handleForgetPreference = (name: string) => {
     const nameKey = normalizeItemName(name);
     
-    // 1. Optimistic UI: Instantly close modal
     setToastMessage(`Reset default categorization for ${name}`);
     setEditingItem(null);
 
-    // 2. Fire and forget
     deleteDoc(doc(db, 'preferences', nameKey));
   };
 
-  const handleCompletePurchase = () => {
+  const handleFinishRun = () => {
     if (!user) return;
     const cartItems = items.filter(item => item.inCart);
     const checkoutTime = new Date().toISOString();
 
-    // 1. Optimistic UI: Instantly change the screen to Habits tab
     setHasDismissedReminder(false);
-    setToastMessage(`Purchase complete. Items logged to history.`);
+    setToastMessage(`Run complete. ${cartItems.length === 1 ? 'Item' : 'Items'} added to Habits.`);
     setActiveTab('habits');
 
-    // 2. Fire and forget database queueing
     addDoc(collection(db, 'purchaseHistory'), {
       date: checkoutTime,
       userId: user.uid,
@@ -291,11 +279,9 @@ export default function App() {
       return;
     }
     
-    // 1. Optimistic UI: Instantly navigate and show toast
     setToastMessage(`Added ${habit.name} to List`);
     if (!stayOnTab) setActiveTab('list'); 
 
-    // 2. Fire and forget
     addDoc(collection(db, 'items'), {
       name: habit.name, 
       category: habit.category, 
@@ -667,7 +653,7 @@ export default function App() {
 
         {activeTab === 'cart' && (
           <div className="flex flex-col gap-3 mt-2">
-            <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">Ready for Checkout</h2>
+            <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">Run Summary</h2>
             {cartTabItems.map((item: GroceryItem) => (
               <ItemCard 
                 key={item.id} 
@@ -682,11 +668,11 @@ export default function App() {
               />
             ))}
             <button 
-              onClick={handleCompletePurchase}
+              onClick={handleFinishRun}
               className="mt-6 w-full bg-[#d3e3d8] text-[#174525] font-headline font-bold py-4 rounded-xl shadow-sm border border-[#b8d0c0] hover:bg-[#c2d6cb] transition-all flex justify-center items-center gap-2 active:scale-95"
             >
               <span className="material-symbols-outlined text-xl">check_circle</span>
-              Complete Purchase
+              Finish Run
             </button>
           </div>
         )}

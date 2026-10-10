@@ -1,5 +1,5 @@
 import { Trash2, CheckSquare, Square, ChevronDown } from 'lucide-react';
-import { GroceryItem as GroceryItemType } from '../types';
+import { GroceryItem as GroceryItemType } from '../app/types';
 
 interface GroceryItemProps {
   item: GroceryItemType;
@@ -21,7 +21,7 @@ export function GroceryItem({
   averageDays,
   daysSinceLastPurchase,
 }: GroceryItemProps) {
-  const currentCategory = item.category || "📦 Other";
+  const currentCategory = item.category || " Other";
 
   return (
     <div className="flex items-center justify-between p-3 sm:p-4 bg-card border rounded-lg group transition-all hover:shadow-sm">
