@@ -167,6 +167,7 @@ export default function App() {
     let learnedTrackHabit = true; 
     let learnedStore = null; 
     try {
+      // getDoc is safe to await because your new persistentLocalCache resolves it instantly offline
       const prefRef = doc(db, 'preferences', nameKey);
       const prefSnap = await getDoc(prefRef);
       if (prefSnap.exists()) {
@@ -182,75 +183,86 @@ export default function App() {
     }
     
     const { category: autoCat, store: autoStore } = autoTagItem(newItemName);
-    try {
-      await addDoc(collection(db, 'items'), {
-        name: newItemName.trim(),
-        category: learnedCat || autoCat, 
-        store: learnedStore || autoStore, 
-        inCart: false, 
-        trackHabit: learnedTrackHabit,
-        userId: user.uid,
-        createdAt: new Date().toISOString()
-      });
-    } catch (error) {
-      setToastMessage("Failed to add item. Check network connection or database permissions.");
-    }
+    
+    // Optimistic UI: Fire and forget the write. Firebase handles the offline queueing.
+    addDoc(collection(db, 'items'), {
+      name: newItemName.trim(),
+      category: learnedCat || autoCat, 
+      store: learnedStore || autoStore, 
+      inCart: false, 
+      trackHabit: learnedTrackHabit,
+      userId: user.uid,
+      createdAt: new Date().toISOString()
+    }).catch(() => setToastMessage("Saved offline. Will sync when connection returns."));
   };
 
-  const handleToggleCart = async (id: string, currentState: boolean) => {
-    const payload: Partial<GroceryItem> = { inCart: !currentState };
-    if (!currentState) {
-      payload.cartedAt = new Date().toISOString();
-    } else {
-      payload.cartedAt = null; 
-    }
-    await updateDoc(doc(db, 'items', id), payload);
+  const handleToggleCart = (id: string, currentState: boolean) => {
+    // 1. Optimistic UI: Instantly update toast message
     setToastMessage(!currentState ? "Moved to Cart" : "Moved back to List");
     setHasDismissedReminder(false); 
+
+    // 2. Fire and forget database update
+    const payload: Partial<GroceryItem> = { inCart: !currentState };
+    payload.cartedAt = !currentState ? new Date().toISOString() : null; 
+    updateDoc(doc(db, 'items', id), payload);
   };
 
-  const handleDeleteItem = async (id: string) => {
-    await deleteDoc(doc(db, 'items', id));
+  const handleDeleteItem = (id: string) => {
+    deleteDoc(doc(db, 'items', id));
   };
 
-  const handleUpdateItem = async (id: string, updates: Partial<GroceryItem>) => {
+  const handleUpdateItem = (id: string, updates: Partial<GroceryItem>) => {
+    // 1. Optimistic UI: Instantly close the modal
+    setEditingItem(null); 
+
+    // 2. Fire and forget database updates
     if (updates.name) {
       const nameKey = normalizeItemName(updates.name);
       const prefPayload: any = { updatedAt: new Date().toISOString() };
       if (updates.category) prefPayload.category = updates.category;
       if (updates.trackHabit !== undefined) prefPayload.trackHabit = updates.trackHabit;
-      await setDoc(doc(db, 'preferences', nameKey), prefPayload, { merge: true });
+      setDoc(doc(db, 'preferences', nameKey), prefPayload, { merge: true });
     }
-    await updateDoc(doc(db, 'items', id), updates);
-    setEditingItem(null); 
+    updateDoc(doc(db, 'items', id), updates);
   };
 
-  const handleToggleTracking = async (itemName: string, newTrackState: boolean) => {
+  const handleToggleTracking = (itemName: string, newTrackState: boolean) => {
     const nameKey = normalizeItemName(itemName);
     
+    // 1. Optimistic UI: Instantly update state
     setTrackingOverrides(prev => ({ ...prev, [nameKey]: newTrackState }));
+    setToastMessage(newTrackState ? `${itemName} is now being tracked!` : `${itemName} is no longer being tracked.`);
 
-    await setDoc(doc(db, 'preferences', nameKey), {
+    // 2. Fire and forget
+    setDoc(doc(db, 'preferences', nameKey), {
       trackHabit: newTrackState,
       updatedAt: new Date().toISOString()
     }, { merge: true });
-    
-    setToastMessage(newTrackState ? `${itemName} is now being tracked!` : `${itemName} is no longer being tracked.`);
   };
 
-  const handleForgetPreference = async (name: string) => {
+  const handleForgetPreference = (name: string) => {
     const nameKey = normalizeItemName(name);
-    await deleteDoc(doc(db, 'preferences', nameKey));
+    
+    // 1. Optimistic UI: Instantly close modal
     setToastMessage(`Reset default categorization for ${name}`);
     setEditingItem(null);
+
+    // 2. Fire and forget
+    deleteDoc(doc(db, 'preferences', nameKey));
   };
 
-  const handleCompletePurchase = async () => {
+  const handleCompletePurchase = () => {
     if (!user) return;
     const cartItems = items.filter(item => item.inCart);
     const checkoutTime = new Date().toISOString();
 
-    await addDoc(collection(db, 'purchaseHistory'), {
+    // 1. Optimistic UI: Instantly change the screen to Habits tab
+    setHasDismissedReminder(false);
+    setToastMessage(`Purchase complete. Items logged to history.`);
+    setActiveTab('habits');
+
+    // 2. Fire and forget database queueing
+    addDoc(collection(db, 'purchaseHistory'), {
       date: checkoutTime,
       userId: user.uid,
       items: cartItems
@@ -266,37 +278,33 @@ export default function App() {
       if (item.trackHabit !== undefined) {
         prefPayload.trackHabit = item.trackHabit;
       }
-      await setDoc(doc(db, 'preferences', nameKey), prefPayload, { merge: true });
-      await deleteDoc(doc(db, 'items', item.id));
+      setDoc(doc(db, 'preferences', nameKey), prefPayload, { merge: true });
+      deleteDoc(doc(db, 'items', item.id));
     }
-    
-    setHasDismissedReminder(false);
-    setToastMessage(`Purchase complete. Items logged to history.`);
-    setActiveTab('habits');
   };
 
-  const handleAddFromHabits = async (habit: any, stayOnTab: boolean = false) => {
+  const handleAddFromHabits = (habit: any, stayOnTab: boolean = false) => {
     if (!user) return;
     const alreadyOnList = items.some(i => normalizeItemName(i.name) === normalizeItemName(habit.name));
     if (alreadyOnList) {
       setToastMessage(`${habit.name} is already on your list`);
       return;
     }
-    try {
-      await addDoc(collection(db, 'items'), {
-        name: habit.name, 
-        category: habit.category, 
-        store: habit.store,
-        trackHabit: habit.trackHabit !== false,
-        userId: user.uid,
-        inCart: false, 
-        createdAt: new Date().toISOString()
-      });
-      setToastMessage(`Added ${habit.name} to List`);
-      if (!stayOnTab) setActiveTab('list'); 
-    } catch (error) {
-      setToastMessage("Failed to add item.");
-    }
+    
+    // 1. Optimistic UI: Instantly navigate and show toast
+    setToastMessage(`Added ${habit.name} to List`);
+    if (!stayOnTab) setActiveTab('list'); 
+
+    // 2. Fire and forget
+    addDoc(collection(db, 'items'), {
+      name: habit.name, 
+      category: habit.category, 
+      store: habit.store,
+      trackHabit: habit.trackHabit !== false,
+      userId: user.uid,
+      inCart: false, 
+      createdAt: new Date().toISOString()
+    }).catch(() => setToastMessage("Failed to sync item."));
   };
   
   const listTabItems = items;

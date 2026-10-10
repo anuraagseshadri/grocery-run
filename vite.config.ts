@@ -9,6 +9,10 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Explicitly tell the Service Worker to cache all image formats
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp}']
+      },
       manifest: {
         name: 'Grocery Run',
         short_name: 'GroceryRun',
