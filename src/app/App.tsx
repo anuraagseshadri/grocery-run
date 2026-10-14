@@ -9,7 +9,9 @@ import { Toast } from '../components/Toast';
 import { autoTagItem } from '../tagger';
 import { STORE_OPTIONS, getItemIcon, CATEGORIES } from '../constants';
 import { Icon } from '@iconify/react';
-import { db, auth } from '../firebase';
+import { db, auth, analytics } from '../firebase';
+import { Analytics } from '@vercel/analytics/react';
+import { logEvent } from 'firebase/analytics';
 import { 
   collection, onSnapshot, addDoc, doc, updateDoc, 
   deleteDoc, getDoc, setDoc, query, where 
@@ -68,6 +70,19 @@ const DEFAULT_VELOCITY: Record<string, number> = {
 };
 
 export default function App() {
+  useEffect(() => {
+    const handleAppInstalled = () => {
+      if (analytics) {
+        logEvent(analytics, 'pwa_installed', {
+          platform: navigator.userAgent,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    };
+    window.addEventListener('appinstalled', handleAppInstalled);
+    return () => window.removeEventListener('appinstalled', handleAppInstalled);
+  }, []);
+
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('list');
@@ -192,6 +207,13 @@ export default function App() {
       userId: user.uid,
       createdAt: new Date().toISOString()
     }).catch(() => setToastMessage("Saved offline. Will sync when connection returns."));
+
+    if (analytics) {
+      logEvent(analytics, 'item_added', {
+        add_method: 'manual_type',
+        item_category: learnedCat || autoCat
+      });
+    }
   };
 
   const handleToggleCart = (id: string, currentState: boolean) => {
@@ -201,6 +223,10 @@ export default function App() {
     const payload: Partial<GroceryItem> = { inCart: !currentState };
     payload.cartedAt = !currentState ? new Date().toISOString() : null; 
     updateDoc(doc(db, 'items', id), payload);
+
+    if (analytics && !currentState) {
+      logEvent(analytics, 'item_checked');
+    }
   };
 
   const handleDeleteItem = (id: string) => {
@@ -245,6 +271,13 @@ export default function App() {
     if (!user) return;
     const cartItems = items.filter(item => item.inCart);
     const checkoutTime = new Date().toISOString();
+
+    if (analytics) {
+      logEvent(analytics, 'run_completed', {
+        total_items: cartItems.length,
+        list_type: 'standard'
+      });
+    }
 
     setHasDismissedReminder(false);
     setToastMessage(`Run complete. ${cartItems.length === 1 ? 'Item' : 'Items'} added to Habits.`);
@@ -291,6 +324,13 @@ export default function App() {
       inCart: false, 
       createdAt: new Date().toISOString()
     }).catch(() => setToastMessage("Failed to sync item."));
+
+    if (analytics) {
+      logEvent(analytics, 'item_added', {
+        add_method: 'predictive',
+        item_category: habit.category
+      });
+    }
   };
   
   const listTabItems = items;
@@ -899,6 +939,7 @@ export default function App() {
         isVisible={!!toastMessage} 
         onClose={() => setToastMessage(null)} 
       />
+      <Analytics />
     </Layout>
   );
 }

@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getAnalytics, Analytics } from "firebase/analytics";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCVj9HCuKZu93eW5jouIVlFGkaYMV3S5hw",
@@ -21,3 +22,9 @@ export const db = initializeFirestore(app, {
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// Initialize analytics strictly in production builds
+export const analytics: Analytics | null = 
+  typeof window !== 'undefined' && import.meta.env.PROD 
+    ? getAnalytics(app) 
+    : null;

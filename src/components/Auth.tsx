@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { auth } from '../firebase';
-import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
+import { auth, analytics } from '../firebase';
+import { logEvent } from 'firebase/analytics';
+// IMPORT getAdditionalUserInfo HERE
+import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, getAdditionalUserInfo } from 'firebase/auth';
 import { toast } from 'sonner';
 import { Mail, Lock, Loader2 } from 'lucide-react';
 
@@ -18,7 +20,16 @@ export function Auth() {
       setLoading(true);
       setAuthError(null);
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      
+      // USE getAdditionalUserInfo TO CHECK FOR NEW USERS
+      const additionalInfo = getAdditionalUserInfo(result);
+      
+      if (analytics && additionalInfo?.isNewUser) {
+        logEvent(analytics, 'sign_up', {
+          method: 'google'
+        });
+      }
       toast.success("Welcome!");
     } catch (error: any) {
       console.error("Google sign-in error:", error);
@@ -47,6 +58,12 @@ export function Auth() {
     try {
       if (isSignUp) {
         await createUserWithEmailAndPassword(auth, email, password);
+        
+        if (analytics) {
+          logEvent(analytics, 'sign_up', {
+            method: 'email'
+          });
+        }
         toast.success("Account created! Welcome aboard.");
       } else {
         await signInWithEmailAndPassword(auth, email, password);
