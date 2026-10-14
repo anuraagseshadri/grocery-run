@@ -96,5 +96,16 @@
     "overrides": {
       "vite": "6.3.5"
     }
+  },
+  "overrides": {
+    "@emotion/react": {
+      "react": "$react"
+    },
+    "@emotion/styled": {
+      "react": "$react"
+    },
+    "@mui/material": {
+      "react": "$react"
+    }
   }
 }
