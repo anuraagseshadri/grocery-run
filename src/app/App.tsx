@@ -99,6 +99,9 @@ export default function App() {
   const [trackingOverrides, setTrackingOverrides] = useState<Record<string, boolean>>({});
   const [preferences, setPreferences] = useState<Record<string, any>>({});
 
+  // Helper to scope preference document IDs per user so accounts never collide
+  const getPrefDocId = (uid: string, nameKey: string) => `${uid}_${nameKey}`;
+
   const [hasDismissedReminder, setHasDismissedReminderState] = useState(() => {
     return sessionStorage.getItem('cartReminderDismissed') === 'true';
   });
@@ -154,8 +157,15 @@ export default function App() {
 
     const unsubscribePrefs = onSnapshot(collection(db, 'preferences'), (snapshot) => {
       const prefsObj: Record<string, any> = {};
-      snapshot.docs.forEach(doc => {
-        prefsObj[doc.id] = doc.data();
+      const prefix = `${user.uid}_`;
+      snapshot.docs.forEach(docSnap => {
+        const data = docSnap.data();
+        if (docSnap.id.startsWith(prefix)) {
+          const cleanKey = docSnap.id.slice(prefix.length);
+          prefsObj[cleanKey] = data;
+        } else if (data.userId === user.uid) {
+          prefsObj[docSnap.id] = data;
+        }
       });
       setPreferences(prefsObj);
     });
@@ -166,6 +176,27 @@ export default function App() {
       unsubscribePrefs();
     };
   }, [user]);
+
+  // Helper to find the latest store from purchaseHistory for this specific user
+  const getLatestStoreFromHistory = (nameKey: string): string | null => {
+    let latestTime = -1;
+    let latestStore: string | null = null;
+
+    purchaseHistory.forEach(order => {
+      if (!order.date || !order.items) return;
+      const orderTime = new Date(order.date).getTime();
+      order.items.forEach((item: GroceryItem) => {
+        if (normalizeItemName(item.name || '') === nameKey && item.store && item.store !== 'Unknown') {
+          if (orderTime >= latestTime) {
+            latestTime = orderTime;
+            latestStore = item.store;
+          }
+        }
+      });
+    });
+
+    return latestStore;
+  };
 
   const handleAddItem = async (newItemName: string) => {
     if (!user) return;
@@ -178,22 +209,25 @@ export default function App() {
       return; 
     }
 
-    let learnedCat = null;
-    let learnedTrackHabit = true; 
-    let learnedStore = null; 
-    try {
-      const prefRef = doc(db, 'preferences', nameKey);
-      const prefSnap = await getDoc(prefRef);
-      if (prefSnap.exists()) {
-        const data = prefSnap.data();
-        learnedCat = data.category;
-        learnedStore = data.lastPurchasedStore; 
-        if (data.trackHabit !== undefined) {
-          learnedTrackHabit = data.trackHabit;
+    let learnedCat = preferences[nameKey]?.category || null;
+    let learnedTrackHabit = preferences[nameKey]?.trackHabit !== undefined ? preferences[nameKey].trackHabit : true; 
+    let learnedStore = preferences[nameKey]?.lastPurchasedStore || getLatestStoreFromHistory(nameKey) || null; 
+
+    if (!learnedStore || !learnedCat) {
+      try {
+        const prefRef = doc(db, 'preferences', getPrefDocId(user.uid, nameKey));
+        const prefSnap = await getDoc(prefRef);
+        if (prefSnap.exists()) {
+          const data = prefSnap.data();
+          learnedCat = learnedCat || data.category;
+          learnedStore = learnedStore || data.lastPurchasedStore; 
+          if (data.trackHabit !== undefined) {
+            learnedTrackHabit = data.trackHabit;
+          }
         }
+      } catch (error) {
+        console.warn("Database read failed. Defaulting to auto-tagger.");
       }
-    } catch (error) {
-      console.warn("Database read failed. Defaulting to auto-tagger.");
     }
     
     const { category: autoCat, store: autoStore } = autoTagItem(newItemName);
@@ -201,7 +235,7 @@ export default function App() {
     addDoc(collection(db, 'items'), {
       name: newItemName.trim(),
       category: learnedCat || autoCat, 
-      store: learnedStore || autoStore, 
+      store: (learnedStore && learnedStore !== 'Unknown') ? learnedStore : autoStore, 
       inCart: false, 
       trackHabit: learnedTrackHabit,
       userId: user.uid,
@@ -236,35 +270,42 @@ export default function App() {
   const handleUpdateItem = (id: string, updates: Partial<GroceryItem>) => {
     setEditingItem(null); 
 
-    if (updates.name) {
+    if (user && updates.name) {
       const nameKey = normalizeItemName(updates.name);
-      const prefPayload: any = { updatedAt: new Date().toISOString() };
+      const prefPayload: any = { 
+        userId: user.uid,
+        updatedAt: new Date().toISOString() 
+      };
       if (updates.category) prefPayload.category = updates.category;
+      if (updates.store) prefPayload.lastPurchasedStore = updates.store;
       if (updates.trackHabit !== undefined) prefPayload.trackHabit = updates.trackHabit;
-      setDoc(doc(db, 'preferences', nameKey), prefPayload, { merge: true });
+      setDoc(doc(db, 'preferences', getPrefDocId(user.uid, nameKey)), prefPayload, { merge: true });
     }
     updateDoc(doc(db, 'items', id), updates);
   };
 
   const handleToggleTracking = (itemName: string, newTrackState: boolean) => {
+    if (!user) return;
     const nameKey = normalizeItemName(itemName);
     
     setTrackingOverrides(prev => ({ ...prev, [nameKey]: newTrackState }));
     setToastMessage(newTrackState ? `${itemName} is now being tracked!` : `${itemName} is no longer being tracked.`);
 
-    setDoc(doc(db, 'preferences', nameKey), {
+    setDoc(doc(db, 'preferences', getPrefDocId(user.uid, nameKey)), {
+      userId: user.uid,
       trackHabit: newTrackState,
       updatedAt: new Date().toISOString()
     }, { merge: true });
   };
 
   const handleForgetPreference = (name: string) => {
+    if (!user) return;
     const nameKey = normalizeItemName(name);
     
     setToastMessage(`Reset default categorization for ${name}`);
     setEditingItem(null);
 
-    deleteDoc(doc(db, 'preferences', nameKey));
+    deleteDoc(doc(db, 'preferences', getPrefDocId(user.uid, nameKey)));
   };
 
   const handleFinishRun = () => {
@@ -292,21 +333,24 @@ export default function App() {
     for (const item of cartItems) {
       const nameKey = normalizeItemName(item.name);
       const prefPayload: any = {
+        userId: user.uid,
+        category: item.category,
         lastPurchasedDate: checkoutTime,
-        lastPurchasedStore: item.store || 'Unknown',
+        lastPurchasedStore: item.store || 'Other',
         updatedAt: checkoutTime
       };
       if (item.trackHabit !== undefined) {
         prefPayload.trackHabit = item.trackHabit;
       }
-      setDoc(doc(db, 'preferences', nameKey), prefPayload, { merge: true });
+      setDoc(doc(db, 'preferences', getPrefDocId(user.uid, nameKey)), prefPayload, { merge: true });
       deleteDoc(doc(db, 'items', item.id));
     }
   };
 
   const handleAddFromHabits = (habit: any, stayOnTab: boolean = false) => {
     if (!user) return;
-    const alreadyOnList = items.some(i => normalizeItemName(i.name) === normalizeItemName(habit.name));
+    const nameKey = normalizeItemName(habit.name);
+    const alreadyOnList = items.some(i => normalizeItemName(i.name) === nameKey);
     if (alreadyOnList) {
       setToastMessage(`${habit.name} is already on your list`);
       return;
@@ -315,10 +359,23 @@ export default function App() {
     setToastMessage(`Added ${habit.name} to List`);
     if (!stayOnTab) setActiveTab('list'); 
 
+    // Always prioritize the most recent purchased store over stale initial itemData.store
+    const resolvedStore = 
+      (habit.lastPurchasedStore && habit.lastPurchasedStore !== 'Unknown' ? habit.lastPurchasedStore : null) ||
+      preferences[nameKey]?.lastPurchasedStore ||
+      getLatestStoreFromHistory(nameKey) ||
+      habit.store ||
+      'Other';
+
+    const resolvedCategory = 
+      preferences[nameKey]?.category ||
+      habit.category ||
+      autoTagItem(habit.name).category;
+
     addDoc(collection(db, 'items'), {
       name: habit.name, 
-      category: habit.category, 
-      store: habit.store,
+      category: resolvedCategory, 
+      store: resolvedStore,
       trackHabit: habit.trackHabit !== false,
       userId: user.uid,
       inCart: false, 
@@ -328,7 +385,7 @@ export default function App() {
     if (analytics) {
       logEvent(analytics, 'item_added', {
         add_method: 'predictive',
-        item_category: habit.category
+        item_category: resolvedCategory
       });
     }
   };
@@ -369,7 +426,7 @@ export default function App() {
   }, {} as Record<string, GroceryItem[]>);
 
   const habitsDashboardData = useMemo(() => {
-    const itemHistory: Record<string, { itemData: GroceryItem, history: {date: number, store: string}[], count: number, isTracked: boolean }> = {};
+    const itemHistory: Record<string, { itemData: GroceryItem, latestOrderTime: number, history: {date: number, store: string}[], count: number, isTracked: boolean }> = {};
     
     purchaseHistory.forEach(order => {
       if (!order.date || !order.items) return;
@@ -389,9 +446,13 @@ export default function App() {
         }
 
         if (!itemHistory[normalizedKey]) {
-          itemHistory[normalizedKey] = { itemData: item, history: [], count: 0, isTracked: currentTrackState };
+          itemHistory[normalizedKey] = { itemData: item, latestOrderTime: orderTime, history: [], count: 0, isTracked: currentTrackState };
         } else {
           itemHistory[normalizedKey].isTracked = currentTrackState;
+          if (orderTime >= itemHistory[normalizedKey].latestOrderTime) {
+            itemHistory[normalizedKey].itemData = item;
+            itemHistory[normalizedKey].latestOrderTime = orderTime;
+          }
         }
         
         itemHistory[normalizedKey].history.push({ date: orderTime, store: item.store || 'Unknown' });
@@ -425,7 +486,7 @@ export default function App() {
       if (record.history.length > 0) {
         const sortedHistory = [...record.history].sort((a, b) => a.date - b.date);
         const lastPurchase = sortedHistory[sortedHistory.length - 1];
-        lastPurchasedStore = lastPurchase.store;
+        lastPurchasedStore = preferences[itemNameKey]?.lastPurchasedStore || lastPurchase.store;
         daysSinceLast = (now - lastPurchase.date) / MS_PER_DAY;
         if (effectiveInterval) {
           progressPercent = Math.min((daysSinceLast / effectiveInterval) * 100, 100);
@@ -439,6 +500,7 @@ export default function App() {
 
       return {
         ...record.itemData,
+        store: lastPurchasedStore !== 'Unknown' ? lastPurchasedStore : record.itemData.store,
         trackHabit: record.isTracked,
         totalPurchases: record.count,
         avgIntervalDays: effectiveInterval ? Math.round(effectiveInterval) : null,
@@ -461,7 +523,7 @@ export default function App() {
   const activeHabitsList = habitTab === 'tracked' ? trackedHabits : untrackedHabits;
 
   const suggestedReplenishments = useMemo(() => {
-    const itemHistory: Record<string, { itemData: GroceryItem, dates: number[], isTracked: boolean }> = {};
+    const itemHistory: Record<string, { itemData: GroceryItem, latestOrderTime: number, dates: number[], isTracked: boolean }> = {};
     
     purchaseHistory.forEach(order => {
       if (!order.date || !order.items) return;
@@ -480,9 +542,13 @@ export default function App() {
         }
 
         if (!itemHistory[normalizedKey]) {
-          itemHistory[normalizedKey] = { itemData: item, dates: [], isTracked: currentTrackState };
+          itemHistory[normalizedKey] = { itemData: item, latestOrderTime: orderTime, dates: [], isTracked: currentTrackState };
         } else {
           itemHistory[normalizedKey].isTracked = currentTrackState;
+          if (orderTime >= itemHistory[normalizedKey].latestOrderTime) {
+            itemHistory[normalizedKey].itemData = item;
+            itemHistory[normalizedKey].latestOrderTime = orderTime;
+          }
         }
         itemHistory[normalizedKey].dates.push(orderTime);
       });
@@ -518,7 +584,11 @@ export default function App() {
         if (daysSinceLast >= (effectiveInterval * 0.9) && daysSinceLast > 2) {
           const alreadyOnList = items.some(i => normalizeItemName(i.name) === normalizeItemName(record.itemData.name));
           if (!alreadyOnList) {
-            suggestions.push(record.itemData);
+            const latestStore = preferences[itemNameKey]?.lastPurchasedStore || record.itemData.store;
+            suggestions.push({
+              ...record.itemData,
+              store: latestStore
+            });
           }
         }
       }
