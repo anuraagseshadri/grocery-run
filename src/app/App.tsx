@@ -7,7 +7,7 @@ import { ItemCard } from '../components/ItemCard';
 import { EditModal } from '../components/EditModal';
 import { Toast } from '../components/Toast';
 import { autoTagItem } from '../tagger';
-import { STORE_OPTIONS, getItemIcon, CATEGORIES } from '../constants';
+import { STORE_OPTIONS, getItemIcon, CATEGORIES, getCategoryBgColor, getCategoryIcon } from '../constants';
 import { Icon } from '@iconify/react';
 import { db, auth, analytics } from '../firebase';
 import { Analytics } from '@vercel/analytics/react';
@@ -30,7 +30,6 @@ interface GroceryItem {
   trackHabit?: boolean;
 }
 
-// MATHEMATICAL STEMMER: Normalizes plurals for the analytics engine
 const normalizeItemName = (name: string) => {
   let n = name.trim().toLowerCase();
   if (n.endsWith('ies')) return n.slice(0, -3) + 'y'; 
@@ -42,16 +41,13 @@ const normalizeItemName = (name: string) => {
 const isDuplicateItem = (newItem: string, existingItem: string) => {
   const a = normalizeItemName(newItem);
   const b = normalizeItemName(existingItem);
-
   if (a === b) return true;
-
   const synonyms = [
     ['coriander', 'cilantro'],
     ['eggplant', 'aubergine'],
     ['zucchini', 'courgette'],
     ['scallion', 'green onion']
   ];
-
   for (const group of synonyms) {
     if (group.includes(a) && group.includes(b)) return true;
   }
@@ -92,18 +88,17 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showStaleCartWarning, setShowStaleCartWarning] = useState(false);
 
-  // Exclusive Accordion state & live clock tick for the Cart screen
   const [expandedCartStore, setExpandedCartStore] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
   const [habitSearchQuery, setHabitSearchQuery] = useState('');
   const [habitTab, setHabitTab] = useState<'tracked' | 'untracked'>('tracked');
+  const [habitSortFilter, setHabitSortFilter] = useState('urgency');
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
   
   const [trackingOverrides, setTrackingOverrides] = useState<Record<string, boolean>>({});
   const [preferences, setPreferences] = useState<Record<string, any>>({});
 
-  // Helper to scope preference document IDs per user so accounts never collide
   const getPrefDocId = (uid: string, nameKey: string) => `${uid}_${nameKey}`;
 
   const [hasDismissedReminder, setHasDismissedReminderState] = useState(() => {
@@ -181,7 +176,6 @@ export default function App() {
     };
   }, [user]);
 
-  // Helper to find the latest store from purchaseHistory for this specific user
   const getLatestStoreFromHistory = (nameKey: string): string | null => {
     let latestTime = -1;
     let latestStore: string | null = null;
@@ -255,7 +249,10 @@ export default function App() {
   };
 
   const handleToggleCart = (id: string, currentState: boolean) => {
-    setToastMessage(!currentState ? "Moved to Cart" : "Moved back to List");
+    const item = items.find(i => i.id === id);
+    const itemName = item ? item.name : 'Item';
+    
+    setToastMessage(!currentState ? `Moved ${itemName} to Cart` : `Moved ${itemName} back to List`);
     setHasDismissedReminder(false); 
     setNowTick(Date.now());
 
@@ -365,7 +362,6 @@ export default function App() {
     setToastMessage(`Added ${habit.name} to List`);
     if (!stayOnTab) setActiveTab('list'); 
 
-    // Always prioritize the most recent purchased store over stale initial itemData.store
     const resolvedStore = 
       (habit.lastPurchasedStore && habit.lastPurchasedStore !== 'Unknown' ? habit.lastPurchasedStore : null) ||
       preferences[nameKey]?.lastPurchasedStore ||
@@ -399,7 +395,6 @@ export default function App() {
   const listTabItems = items;
   const cartTabItems = items.filter(item => item.inCart);
 
-  // Refresh timer every 30s when viewing a non-empty Cart
   useEffect(() => {
     if (activeTab !== 'cart' || cartTabItems.length === 0) return;
     setNowTick(Date.now());
@@ -439,7 +434,6 @@ export default function App() {
     return groups;
   }, {} as Record<string, GroceryItem[]>);
 
-  // Group Cart items by store for the Multi-Store Accordion
   const cartGroupedByStore = useMemo(() => {
     return cartTabItems.reduce((groups, item) => {
       const rawStore = item.store?.trim() || 'Other';
@@ -456,7 +450,6 @@ export default function App() {
 
   const cartStoreNames = useMemo(() => Object.keys(cartGroupedByStore).sort(), [cartGroupedByStore]);
 
-  // Keep exclusive accordion synced: auto-select first store when cart populates or active store empties
   useEffect(() => {
     if (cartStoreNames.length === 0) {
       setExpandedCartStore(null);
@@ -465,7 +458,6 @@ export default function App() {
     }
   }, [cartStoreNames, expandedCartStore]);
 
-  // Smart Shopping Run Duration & Status calculation
   const cartRunTelemetry = useMemo(() => {
     if (cartTabItems.length === 0) {
       return { isActive: false, isPaused: false, durationLabel: null };
@@ -581,16 +573,42 @@ export default function App() {
       };
     });
 
-    return dashboard.sort((a, b) => {
-      if (a.status === 'Restock Soon' && b.status !== 'Restock Soon') return -1;
-      if (b.status === 'Restock Soon' && a.status !== 'Restock Soon') return 1;
-      return b.progressPercent - a.progressPercent;
-    });
+    return dashboard;
   }, [purchaseHistory, trackingOverrides, preferences]);
 
-  const trackedHabits = habitsDashboardData.filter(item => item.trackHabit !== false);
-  const untrackedHabits = habitsDashboardData.filter(item => item.trackHabit === false);
-  const activeHabitsList = habitTab === 'tracked' ? trackedHabits : untrackedHabits;
+  const activeHabitsList = habitTab === 'tracked' 
+    ? habitsDashboardData.filter(i => i.trackHabit !== false) 
+    : habitsDashboardData.filter(i => i.trackHabit === false);
+
+  const filteredAndSortedHabits = useMemo(() => {
+    let result = activeHabitsList.filter(habit => 
+      habit.name.toLowerCase().includes(habitSearchQuery.toLowerCase().trim())
+    );
+    
+    result.sort((a, b) => {
+      if (habitSortFilter === 'urgency' && habitTab === 'tracked') {
+        if (a.status === 'Restock Soon' && b.status !== 'Restock Soon') return -1;
+        if (b.status === 'Restock Soon' && a.status !== 'Restock Soon') return 1;
+        return b.progressPercent - a.progressPercent;
+      } else if (habitSortFilter === 'recent') {
+        return (a.daysSinceLast !== null ? a.daysSinceLast : 9999) - (b.daysSinceLast !== null ? b.daysSinceLast : 9999);
+      } else if (habitSortFilter === 'frequent') {
+        return b.totalPurchases - a.totalPurchases;
+      } else if (habitSortFilter === 'az') {
+        return a.name.localeCompare(b.name);
+      }
+      return 0;
+    });
+    
+    return result;
+  }, [activeHabitsList, habitSearchQuery, habitSortFilter, habitTab]);
+
+  const handleHabitTabSwitch = (tab: 'tracked' | 'untracked') => {
+    setHabitTab(tab);
+    if (tab === 'untracked' && habitSortFilter === 'urgency') {
+      setHabitSortFilter('recent');
+    }
+  };
 
   const suggestedReplenishments = useMemo(() => {
     const itemHistory: Record<string, { itemData: GroceryItem, latestOrderTime: number, dates: number[], isTracked: boolean }> = {};
@@ -780,29 +798,31 @@ export default function App() {
                   const officialStore = STORE_OPTIONS.find(s => s.name.toLowerCase() === storeName.toLowerCase());
                   
                   const storeHeader = officialStore?.imageLogo ? (
-                    <div className="flex items-center px-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className={`flex items-center px-4 py-3 rounded-xl border shadow-sm ${officialStore.color || 'bg-white border-slate-200'}`}>
                       <img 
                         src={officialStore.imageLogo}
                         alt={storeName} 
-                        className="h-5 sm:h-6 max-w-[100px] sm:max-w-[120px] object-contain object-left" 
+                        className="h-5 sm:h-6 max-w-[100px] sm:max-w-[120px] object-contain object-left drop-shadow-sm" 
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       />
-                      <div className="ml-auto bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md flex items-center justify-center">
+                      <div className="ml-auto bg-white/80 text-slate-800 px-2.5 py-1 rounded-md shadow-sm border border-slate-200/50 flex items-center justify-center backdrop-blur-sm">
                         <span className="text-xs font-bold">{itemsInStore.length}</span>
                       </div>
                     </div>
                   ) : (
                     <div className={`flex items-center px-4 py-3 rounded-xl border shadow-sm font-headline font-bold uppercase tracking-wider text-sm ${officialStore?.color || 'bg-white text-slate-600 border-slate-200'}`}>
                       <span>{officialStore?.logo || officialStore?.name || storeName || 'Other'}</span>
-                      <div className="ml-auto bg-black/5 px-2.5 py-1 rounded-md flex items-center justify-center">
+                      <div className="ml-auto bg-white/60 text-slate-800 px-2.5 py-1 rounded-md shadow-sm border border-slate-200/50 flex items-center justify-center backdrop-blur-sm">
                         <span className="text-xs font-bold">{itemsInStore.length}</span>
                       </div>
                     </div>
                   );
+                  
                   const categoryOrder = CATEGORIES.reduce((acc, cat, index) => {
                     acc[cat.name] = index;
                     return acc;
                   }, {} as Record<string, number>);
+                  
                   const sortedItems = [...itemsInStore].sort((a, b) => {
                     const orderA = categoryOrder[a.category || ''] ?? 99;
                     const orderB = categoryOrder[b.category || ''] ?? 99;
@@ -838,7 +858,6 @@ export default function App() {
 
         {activeTab === 'cart' && (
           <div className="flex flex-col gap-4 mt-1 animate-fade-in">
-            {/* Page Title & Live Status Subtitle */}
             <section className="px-1">
               <h2 className="text-2xl font-headline font-black text-slate-900 tracking-tight leading-none">
                 Run Summary
@@ -887,7 +906,6 @@ export default function App() {
               </div>
             ) : (
               <>
-                {/* Cart Overview Banner */}
                 <section className="bg-white rounded-2xl p-4 shadow-sm border border-emerald-100 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-700 border border-emerald-100 shrink-0">
@@ -905,7 +923,6 @@ export default function App() {
                   </span>
                 </section>
 
-                {/* Exclusive Multi-Store Accordions */}
                 <div className="flex flex-col gap-3">
                   {cartStoreNames.map((storeName) => {
                     const itemsInStore = cartGroupedByStore[storeName];
@@ -928,18 +945,18 @@ export default function App() {
                     return (
                       <div 
                         key={storeName} 
-                        className={`bg-white rounded-2xl border transition-all duration-200 overflow-hidden shadow-sm ${
-                          isExpanded ? 'border-emerald-300 ring-2 ring-emerald-100/60' : 'border-emerald-100'
-                        }`}
+                        className={`rounded-2xl border transition-all duration-200 overflow-hidden shadow-sm ${
+                          isExpanded ? 'ring-2 ring-primary/20' : ''
+                        } ${officialStore?.color || 'bg-white border-slate-200'}`}
                       >
                         <button
                           type="button"
                           onClick={() => setExpandedCartStore(isExpanded ? null : storeName)}
-                          className="w-full p-4 flex items-center justify-between bg-white hover:bg-emerald-50/40 transition-colors text-left select-none"
+                          className="w-full p-4 flex items-center justify-between text-left select-none hover:brightness-95 transition-all"
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             {officialStore?.imageLogo ? (
-                              <div className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white flex items-center justify-center shrink-0">
+                              <div className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center shrink-0">
                                 <img 
                                   src={officialStore.imageLogo}
                                   alt={storeName} 
@@ -948,25 +965,25 @@ export default function App() {
                                 />
                               </div>
                             ) : (
-                              <span className={`px-3 py-1 rounded-lg border font-headline font-bold uppercase tracking-wider text-xs shrink-0 ${officialStore?.color || 'bg-white text-slate-600 border-slate-200'}`}>
+                              <span className="px-3 py-1 rounded-lg bg-white/50 border border-slate-200/50 font-headline font-bold uppercase tracking-wider text-xs shrink-0 text-slate-800 shadow-sm">
                                 {officialStore?.logo || officialStore?.name || storeName}
                               </span>
                             )}
 
-                            <span className="text-xs text-slate-500 font-semibold truncate">
+                            <span className="text-xs text-slate-800 font-bold truncate">
                               {itemsInStore.length} {itemsInStore.length === 1 ? 'item' : 'items'}
                             </span>
                           </div>
 
-                          <span className={`w-7 h-7 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 transition-transform duration-200 shrink-0 ${
-                            isExpanded ? 'rotate-180 bg-emerald-50 text-emerald-700' : ''
+                          <span className={`w-7 h-7 rounded-full bg-white/80 shadow-sm flex items-center justify-center text-slate-600 transition-transform duration-200 shrink-0 ${
+                            isExpanded ? 'rotate-180 text-primary' : ''
                           }`}>
                             <span className="material-symbols-outlined text-[18px]">expand_more</span>
                           </span>
                         </button>
 
                         {isExpanded && (
-                          <div className="border-t border-slate-100 p-3 flex flex-col gap-2 bg-[#F4FAF6]/60">
+                          <div className="border-t border-slate-200/50 p-3 flex flex-col gap-2 bg-white/40 backdrop-blur-md">
                             {sortedStoreItems.map((item: GroceryItem) => (
                               <ItemCard 
                                 key={item.id} 
@@ -987,19 +1004,13 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Single Primary CTA */}
                 <div className="pt-2 pb-4">
                   <button 
                     onClick={handleFinishRun}
-                    className="w-full py-4 px-6 bg-[#00A86B] hover:bg-[#059669] text-white rounded-2xl font-headline font-extrabold shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all flex flex-col items-center justify-center"
+                    className="w-full py-4 px-6 bg-[#00A86B] hover:bg-[#059669] text-white rounded-2xl font-headline font-extrabold shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                   >
-                    <div className="flex items-center gap-2 text-base">
-                      <span className="material-symbols-outlined text-xl">check_circle</span>
-                      <span>Finish Run</span>
-                    </div>
-                    <span className="text-[11px] text-emerald-100 font-medium tracking-normal mt-0.5">
-                      Save purchase &amp; log to Habits
-                    </span>
+                    <span className="material-symbols-outlined text-xl">check_circle</span>
+                    <span>Finish Run</span>
                   </button>
                 </div>
               </>
@@ -1017,25 +1028,25 @@ export default function App() {
                 
                 <div className="flex p-1 bg-white rounded-xl shadow-sm mb-2">
                   <button 
-                    onClick={() => setHabitTab('tracked')}
+                    onClick={() => handleHabitTabSwitch('tracked')}
                     className={`flex-1 py-2 text-center rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 ${
                       habitTab === 'tracked' ? 'bg-[#eaf3ea] text-[#1b3d2b] shadow-sm' : 'text-slate-500 hover:text-slate-900'
                     }`}
                   >
                     <span>Tracked Items</span>
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${habitTab === 'tracked' ? 'bg-[#7d9d7c]/20 text-[#1b3d2b]' : 'bg-slate-100 text-slate-500'}`}>
-                      {trackedHabits.length}
+                      {habitsDashboardData.filter(i => i.trackHabit !== false).length}
                     </span>
                   </button>
                   <button 
-                    onClick={() => setHabitTab('untracked')}
+                    onClick={() => handleHabitTabSwitch('untracked')}
                     className={`flex-1 py-2 text-center rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 ${
                       habitTab === 'untracked' ? 'bg-[#eaf3ea] text-[#1b3d2b] shadow-sm' : 'text-slate-500 hover:text-slate-900'
                     }`}
                   >
                     <span>Untracked items</span>
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${habitTab === 'untracked' ? 'bg-[#7d9d7c]/20 text-[#1b3d2b]' : 'bg-slate-100 text-slate-500'}`}>
-                      {untrackedHabits.length}
+                      {habitsDashboardData.filter(i => i.trackHabit === false).length}
                     </span>
                   </button>
                 </div>
@@ -1056,147 +1067,160 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="relative mt-2">
-                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
-                  <input 
-                    type="text"
-                    placeholder={habitTab === 'tracked' ? "Find tracked item..." : "Find untracked items..."}
-                    value={habitSearchQuery}
-                    onChange={(e) => setHabitSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow"
-                  />
-                  {habitSearchQuery && (
-                    <button 
-                      onClick={() => setHabitSearchQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                      <span className="material-symbols-outlined text-sm">close</span>
-                    </button>
-                  )}
+                <div className="flex gap-2 relative mt-2">
+                  <div className="relative flex-1">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+                    <input 
+                      type="text"
+                      placeholder={habitTab === 'tracked' ? "Find tracked item..." : "Find untracked items..."}
+                      value={habitSearchQuery}
+                      onChange={(e) => setHabitSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow"
+                    />
+                    {habitSearchQuery && (
+                      <button 
+                        onClick={() => setHabitSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <span className="material-symbols-outlined text-sm">close</span>
+                      </button>
+                    )}
+                  </div>
+                  <select
+                    value={habitSortFilter}
+                    onChange={(e) => setHabitSortFilter(e.target.value)}
+                    className="bg-white border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow px-2 py-3 font-semibold text-slate-700 shadow-sm"
+                  >
+                    {habitTab === 'tracked' && <option value="urgency">Restock Urgency</option>}
+                    <option value="recent">Recently Bought</option>
+                    <option value="frequent">Most Bought</option>
+                    <option value="az">Alphabetical (A-Z)</option>
+                  </select>
                 </div>
               </div>
 
               <div className="flex flex-col gap-3">
-                {activeHabitsList
-                  .filter(habit => habit.name.toLowerCase().includes(habitSearchQuery.toLowerCase().trim()))
-                  .map((habit, index) => {
-                    const isAlreadyOnList = listTabItems.some(i => normalizeItemName(i.name) === normalizeItemName(habit.name));
-                    
-                    return (
-                      <div key={`${habit.id}-${index}`} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
-                        
+                {filteredAndSortedHabits.map((habit, index) => {
+                  const isAlreadyOnList = listTabItems.some(i => normalizeItemName(i.name) === normalizeItemName(habit.name));
+                  
+                  return (
+                    <div key={`${habit.id}-${index}`} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                      
+                      <div className="flex justify-between items-center mb-1">
+                        <h3 className="font-bold text-slate-800 capitalize flex items-center gap-2 flex-1 min-w-0 pr-3">
+                          <Icon icon={getItemIcon(habit.name, habit.category)} className="text-xl shrink-0" />
+                          <span className="break-words leading-tight">{habit.name}</span>
+                        </h3>
                         {habitTab === 'tracked' ? (
-                          <div className="flex justify-between items-center mb-5">
-                            <h3 className="font-bold text-slate-800 capitalize flex items-center gap-2 flex-1 min-w-0 pr-3">
-                              <Icon icon={getItemIcon(habit.name, habit.category)} className="text-xl shrink-0" />
-                              <span className="break-words leading-tight">{habit.name}</span>
-                            </h3>
-                            <button 
-                              onClick={() => handleAddFromHabits(habit, true)}
-                              disabled={isAlreadyOnList}
-                              className={`flex items-center gap-1 text-xs font-bold px-3.5 py-1.5 rounded-full transition-all active:scale-95 shrink-0 ${
-                                isAlreadyOnList
-                                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                  : habit.status === 'Restock Soon' 
-                                    ? 'bg-[#FFE4E6] text-[#BE123C] hover:bg-rose-100 shadow-sm' 
-                                    : 'bg-[#DCEDE0] text-[#1b3d2b] hover:bg-[#c2d6cb] shadow-sm'
-                              }`}
-                            >
-                              {isAlreadyOnList ? 'Added to List' : 'Restock Soon'}
-                              <span className="material-symbols-outlined text-[16px] font-bold">
-                                {isAlreadyOnList ? 'check' : 'add'}
-                              </span>
-                            </button>
-                          </div>
+                          <button 
+                            onClick={() => handleAddFromHabits(habit, true)}
+                            disabled={isAlreadyOnList}
+                            className={`flex items-center gap-1 text-xs font-bold px-3.5 py-1.5 rounded-full transition-all active:scale-95 shrink-0 ${
+                              isAlreadyOnList
+                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                : habit.status === 'Restock Soon' 
+                                  ? 'bg-[#FFE4E6] text-[#BE123C] hover:bg-rose-100 shadow-sm' 
+                                  : 'bg-[#DCEDE0] text-[#1b3d2b] hover:bg-[#c2d6cb] shadow-sm'
+                            }`}
+                          >
+                            {isAlreadyOnList ? 'Added to List' : 'Restock Soon'}
+                            <span className="material-symbols-outlined text-[16px] font-bold">
+                              {isAlreadyOnList ? 'check' : 'add'}
+                            </span>
+                          </button>
                         ) : (
-                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
-                            <h3 className="font-bold text-slate-800 capitalize flex items-center gap-2 flex-1 min-w-0 pr-3 mb-2 sm:mb-0">
-                              <Icon icon={getItemIcon(habit.name, habit.category)} className="text-xl shrink-0" />
-                              <span className="break-words leading-tight">{habit.name}</span>
-                            </h3>
-                            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-                              <button 
-                                onClick={() => handleAddFromHabits(habit, true)}
-                                disabled={isAlreadyOnList}
-                                className={`flex-1 sm:flex-none flex items-center justify-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full transition-all active:scale-95 ${
-                                  isAlreadyOnList ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                                }`}
-                              >
-                                {isAlreadyOnList ? 'Added' : 'Add to List'}
-                                <span className="material-symbols-outlined text-[16px] font-bold">{isAlreadyOnList ? 'check' : 'add'}</span>
-                              </button>
-                              <button 
-                                onClick={() => handleToggleTracking(habit.name, true)}
-                                className="flex-1 sm:flex-none flex items-center justify-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full bg-[#15803D] text-white shadow-md hover:bg-[#006d30] active:scale-95 transition-all"
-                              >
-                                <span className="material-symbols-outlined text-[16px]">sync</span>
-                                Track
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm text-slate-600 mb-3">
-                          <div>
-                            <span className="block text-[10px] uppercase tracking-wider font-bold text-slate-400">Purchases</span>
-                            <span className="font-bold text-slate-800 text-lg">{habit.totalPurchases}</span>
-                          </div>
-                          {habitTab === 'tracked' && (
-                            <div>
-                              <span className="block text-[10px] uppercase tracking-wider font-bold text-slate-400">Avg Cycle</span>
-                              <span className="font-bold text-slate-800 text-lg">{habit.avgIntervalDays ? `${habit.avgIntervalDays}d` : '--'}</span>
-                            </div>
-                          )}
-                          <div>
-                            <span className="block text-[10px] uppercase tracking-wider font-bold text-slate-400">Last Bought</span>
-                            <span className="font-bold text-slate-800 text-lg">{habit.daysSinceLast !== null ? `${habit.daysSinceLast}d ago` : '--'}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3 border-t border-slate-100 mt-2">
-                          <div className="flex items-center flex-wrap gap-1.5">
-                            <span className="text-xs text-slate-400">Last bought from:</span>
-                            <span className="text-xs font-bold text-slate-700 capitalize">
-                              {habit.lastPurchasedStore}
-                            </span>
-                          </div>
-                          
-                          {habitTab === 'untracked' && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 self-start sm:self-auto">
-                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                              Not tracked
-                            </span>
-                          )}
-                        </div>
-                        
-                        {habitTab === 'tracked' && (
-                          <>
-                            <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full transition-all ${
-                                  habit.status === 'Restock Soon' ? 'bg-[#EF4444]' : 
-                                  habit.status === 'Need Data' ? 'bg-amber-400' : 
-                                  'bg-emerald-500'
-                                }`}
-                                style={{ width: `${habit.progressPercent}%` }}
-                              />
-                            </div>
-                            <div className="flex justify-end mt-2">
-                              <button 
-                                onClick={() => handleToggleTracking(habit.name, false)}
-                                className="text-slate-400 hover:text-slate-600 font-semibold text-xs flex items-center gap-1 transition-colors px-2 py-1 rounded"
-                              >
-                                <span className="material-symbols-outlined text-[14px]">do_not_disturb_on</span>
-                                Stop tracking (move to untracked)
-                              </button>
-                            </div>
-                          </>
+                          <button 
+                            onClick={() => handleAddFromHabits(habit, true)}
+                            disabled={isAlreadyOnList}
+                            className={`flex items-center justify-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full transition-all active:scale-95 ${
+                              isAlreadyOnList ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                            }`}
+                          >
+                            {isAlreadyOnList ? 'Added' : 'Add to List'}
+                            <span className="material-symbols-outlined text-[16px] font-bold">{isAlreadyOnList ? 'check' : 'add'}</span>
+                          </button>
                         )}
                       </div>
-                    );
-                  })}
+
+                      {/* NEW 2x2 GRID */}
+                      <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm text-slate-600 mb-4 mt-4 bg-slate-50/50 rounded-xl p-3 border border-slate-100">
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider font-bold text-slate-400">Purchases</span>
+                          <span className="font-bold text-slate-800 text-lg">{habit.totalPurchases}</span>
+                        </div>
+                        {habitTab === 'tracked' ? (
+                          <div>
+                            <span className="block text-[10px] uppercase tracking-wider font-bold text-slate-400">Avg Cycle</span>
+                            <span className="font-bold text-slate-800 text-lg">{habit.avgIntervalDays ? `${habit.avgIntervalDays}d` : '--'}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end pr-2">
+                            <button 
+                              onClick={() => handleToggleTracking(habit.name, true)}
+                              className="flex items-center justify-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full bg-[#15803D] text-white shadow-md hover:bg-[#006d30] active:scale-95 transition-all"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">sync</span>
+                              Track
+                            </button>
+                          </div>
+                        )}
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider font-bold text-slate-400">Last Bought</span>
+                          <span className="font-bold text-slate-800 text-lg">{habit.daysSinceLast !== null ? `${habit.daysSinceLast}d ago` : '--'}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider font-bold text-slate-400">Store</span>
+                          <span className="font-bold text-slate-800 text-lg capitalize truncate block pr-2">
+                            {habit.lastPurchasedStore}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* NEW CATEGORY FOOTER */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3 border-t border-slate-100">
+                        <div className={`inline-flex items-center gap-1 text-[10px] font-label font-bold px-2.5 py-1 rounded-md border whitespace-nowrap ${getCategoryBgColor(habit.category)}`}>
+                          <span className="material-symbols-outlined text-[14px] leading-none">
+                            {getCategoryIcon(habit.category)}
+                          </span>
+                          <span>{habit.category || 'General'}</span>
+                        </div>
+                        
+                        {habitTab === 'untracked' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 self-start sm:self-auto">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                            Not tracked
+                          </span>
+                        )}
+                      </div>
+                      
+                      {habitTab === 'tracked' && (
+                        <>
+                          <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full transition-all ${
+                                habit.status === 'Restock Soon' ? 'bg-[#EF4444]' : 
+                                habit.status === 'Need Data' ? 'bg-amber-400' : 
+                                'bg-emerald-500'
+                              }`}
+                              style={{ width: `${habit.progressPercent}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-end mt-2">
+                            <button 
+                              onClick={() => handleToggleTracking(habit.name, false)}
+                              className="text-slate-400 hover:text-slate-600 font-semibold text-xs flex items-center gap-1 transition-colors px-2 py-1 rounded"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">do_not_disturb_on</span>
+                              Stop tracking (move to untracked)
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
                 
-                {activeHabitsList.length === 0 && (
+                {filteredAndSortedHabits.length === 0 && (
                   <div className="text-center py-12 px-6 bg-white border border-slate-200 rounded-xl shadow-sm">
                     <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                       <span className="material-symbols-outlined text-3xl text-slate-400">monitoring</span>
