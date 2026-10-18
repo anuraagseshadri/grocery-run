@@ -1012,10 +1012,8 @@ export default function App() {
                           key={catName} 
                           className={`inline-flex items-center gap-1 text-[10px] font-label font-bold px-2 py-0.5 rounded-md border ${getCategoryBgColor(catName)}`}
                         >
-                          <span className="material-symbols-outlined text-[12px] leading-none">
-                            {getCategoryIcon(catName)}
-                          </span>
-                          <span>{catName}: {count}</span>
+                         <Icon icon={getCategoryIcon(catName)} className="text-[13px] shrink-0" />
+                            <span>{catName}: {count}</span>
                         </span>
                       ))}
                     </div>
@@ -1275,9 +1273,7 @@ export default function App() {
 
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
                         <span className={`w-fit inline-flex items-center gap-1 text-[10px] font-label font-bold px-2.5 py-1 rounded-md border whitespace-nowrap ${getCategoryBgColor(habit.category)}`}>
-                          <span className="material-symbols-outlined text-[14px] leading-none">
-                            {getCategoryIcon(habit.category)}
-                          </span>
+                          <Icon icon={getCategoryIcon(habit.category)} className="text-[14px] shrink-0" />
                           <span>{habit.category || 'General'}</span>
                         </span>
                         

@@ -10,7 +10,7 @@ interface EditModalProps {
   onForget: (name: string) => void;
 }
 
-const getCategoryIcon = (categoryName: string) => {
+const getCategoryModalIcon = (categoryName: string) => {
   const iconMap: Record<string, string> = {
     'Produce': 'fluent-emoji-flat:leafy-green',
     'Bakery': 'fluent-emoji-flat:croissant',
@@ -20,6 +20,7 @@ const getCategoryIcon = (categoryName: string) => {
     'Pasta & Noodles': 'fluent-emoji-flat:spaghetti',  
     'Breakfast & Cereal': 'fluent-emoji-flat:bowl-with-spoon',
     'Cooking Essentials': 'fluent-emoji-flat:salt',
+    'Nuts & Seeds': 'fluent-emoji-flat:peanuts',
     'Dessert & Snacks': 'fluent-emoji-flat:cookie',
     'Beverages': 'fluent-emoji-flat:tropical-drink', 
     'Drinks & Beverages': 'fluent-emoji-flat:tropical-drink',
@@ -35,16 +36,15 @@ const getCategoryIcon = (categoryName: string) => {
 
 const getStoreBrand = (storeName: string) => {
   const brands: Record<string, { icon: string, activeClass: string }> = {
-    'Walmart': { icon: 'fluent-emoji-flat:shopping-cart', activeClass: 'border-blue-500 bg-blue-50 text-blue-700' },
+    'Real Canadian Superstore': { icon: 'fluent-emoji-flat:shopping-bags', activeClass: 'border-blue-500 bg-blue-50 text-blue-800' },
+    'Walmart': { icon: 'fluent-emoji-flat:shopping-cart', activeClass: 'border-sky-500 bg-sky-50 text-sky-800' },
     'Costco': { icon: 'fluent-emoji-flat:department-store', activeClass: 'border-red-500 bg-red-50 text-red-700' },
     'No Frills': { icon: 'fluent-emoji-flat:banana', activeClass: 'border-yellow-400 bg-yellow-50 text-yellow-800' },
-    'Loblaws': { icon: 'fluent-emoji-flat:shopping-bags', activeClass: 'border-orange-500 bg-orange-50 text-orange-700' },
-    'Metro': { icon: 'fluent-emoji-flat:red-apple', activeClass: 'border-rose-500 bg-rose-50 text-rose-700' },
-    'Sobeys': { icon: 'fluent-emoji-flat:leafy-green', activeClass: 'border-emerald-500 bg-emerald-50 text-emerald-700' },
-    'FreshCo': { icon: 'fluent-emoji-flat:green-apple', activeClass: 'border-green-500 bg-green-50 text-green-700' },
-    'Shoppers Drug Mart': { icon: 'fluent-emoji-flat:pill', activeClass: 'border-red-500 bg-red-50 text-red-700' },
-    'Asian Grocery': { icon: 'emojione:flag-for-china', activeClass: 'border-fuchsia-500 bg-fuchsia-50 text-fuchsia-700' },
-    'Indian Grocery': { icon: 'emojione:flag-for-india', activeClass: 'border-teal-500 bg-teal-50 text-teal-700' }
+    'FreshCo': { icon: 'fluent-emoji-flat:green-apple', activeClass: 'border-emerald-500 bg-emerald-50 text-emerald-800' },
+    'Shoppers Drug Mart': { icon: 'fluent-emoji-flat:pill', activeClass: 'border-rose-500 bg-rose-50 text-rose-700' },
+    "Farmers' Market": { icon: 'fluent-emoji-flat:ear-of-corn', activeClass: 'border-amber-500 bg-amber-50 text-amber-900' },
+    'Asian Grocery': { icon: 'emojione:flag-for-china', activeClass: 'border-red-600 bg-red-50 text-red-800' },
+    'Indian Grocery': { icon: 'emojione:flag-for-india', activeClass: 'border-orange-500 bg-orange-50 text-orange-800' }
   };
   
   return brands[storeName] || { 
@@ -109,10 +109,10 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
               >
                 <div className="flex items-center justify-between w-full mb-1">
                   <span className={`text-sm font-bold flex items-center gap-1.5 ${trackHabit !== false ? 'text-[#1b3d2b]' : 'text-slate-700'}`}>
-                    <span className="text-base"></span> Track Item
+                    Track Item
                   </span>
                   {trackHabit !== false && (
-                    <span className="w-4 h-4 rounded-full bg-[#27523a] text-white flex items-center justify-center text-[10px]"></span>
+                    <span className="w-4 h-4 rounded-full bg-[#27523a] text-white flex items-center justify-center text-[10px]">✓</span>
                   )}
                 </div>
                 <p className={`text-[11px] leading-tight font-medium ${trackHabit !== false ? 'text-[#2b5940]' : 'text-slate-400'}`}>
@@ -129,10 +129,10 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
               >
                 <div className="flex items-center justify-between w-full mb-1">
                   <span className={`text-sm font-bold flex items-center gap-1.5 ${trackHabit === false ? 'text-[#713f12]' : 'text-slate-700'}`}>
-                    <span className="text-base"></span> One-time
+                    One-time
                   </span>
                   {trackHabit === false && (
-                    <span className="w-4 h-4 rounded-full bg-[#eab308] text-white flex items-center justify-center text-[10px]"></span>
+                    <span className="w-4 h-4 rounded-full bg-[#eab308] text-white flex items-center justify-center text-[10px]">✓</span>
                   )}
                 </div>
                 <p className={`text-[11px] leading-tight font-medium ${trackHabit === false ? 'text-[#713f12]' : 'text-slate-400'}`}>
@@ -182,7 +182,7 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
                     }`}
                   >
                     <Icon 
-                      icon={getCategoryIcon(c.name)} 
+                      icon={getCategoryModalIcon(c.name)} 
                       className="text-3xl drop-shadow-sm" 
                     />
                     <span className="text-[11px] font-bold tracking-wide text-center leading-tight">

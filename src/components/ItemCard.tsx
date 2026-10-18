@@ -99,12 +99,10 @@ export function ItemCard({
 
         {/* RIGHT SIDE: Category Tag & Action Button (Delete in List, Undo in Cart) */}
         <div className="flex items-center gap-2 shrink-0">
-          <div className={`flex items-center gap-1 text-[10px] font-label px-2 py-1 rounded-md border shrink-0 transition-all ${
+          <div className={`flex items-center gap-1 text-[10px] font-label font-semibold px-2 py-1 rounded-md border shrink-0 transition-all ${
              isListMode && inCart ? 'opacity-50 grayscale' : ''
           } ${getCategoryBgColor(category)}`}>
-            <span className="material-symbols-outlined text-[14px] leading-none">
-              {getCategoryIcon(category)}
-            </span>
+            <Icon icon={getCategoryIcon(category)} className="text-[14px] shrink-0" />
             <span className="whitespace-nowrap">{category || 'General'}</span>
           </div>
 

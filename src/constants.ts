@@ -1,14 +1,60 @@
 export const STORE_OPTIONS = [
-  { name: 'Real Canadian Superstore', color: 'bg-blue-50 border-blue-200 text-blue-800', logo: 'Superstore', imageLogo: '/logos/superstore.svg' },
-  { name: 'Costco', color: 'bg-red-50 border-red-200 text-red-800', logo: 'COSTCO', imageLogo: '/logos/costco.svg' },
-  { name: 'Walmart', color: 'bg-sky-50 border-sky-200 text-sky-800', logo: 'Walmart', imageLogo: '/logos/walmart.svg' },
-  { name: 'No Frills', color: 'bg-yellow-50 border-yellow-300 text-yellow-900', logo: 'no frills', imageLogo: '/logos/nofrills.svg' },
-  { name: 'FreshCo', color: 'bg-emerald-50 border-emerald-300 text-emerald-900', logo: 'FreshCo.', imageLogo: '/logos/freshco.svg' },
-  { name: 'Shoppers Drug Mart', color: 'bg-rose-50 border-rose-200 text-rose-800', logo: 'SHOPPERS', imageLogo: '/logos/sdm.svg' },
-  { name: "Farmers' Market", color: 'bg-amber-100/80 border-amber-300 text-amber-950 shadow-sm', logo: "🌾 FARMERS' MARKET" },
-  { name: 'Asian Grocery', logo: 'ASIAN GROCERY', color: 'bg-gradient-to-r from-red-700 to-rose-900 text-white border-red-900 shadow-sm' },
-  { name: 'Indian Grocery', logo: 'INDIAN GROCERY', color: 'bg-gradient-to-r from-[#FF9933] via-[#FFFFFF] to-[#138808] text-slate-900 border-slate-300 shadow-sm' },
-  { name: 'Other', color: 'bg-white border-slate-200 text-slate-600', logo: 'Other' }
+  { 
+    name: 'Real Canadian Superstore', 
+    color: 'bg-blue-50 border-blue-200 text-blue-800', 
+    logo: 'Superstore', 
+    imageLogo: '/logos/superstore.svg' 
+  },
+  { 
+    name: 'Costco', 
+    color: 'bg-red-50 border-red-200 text-red-800', 
+    logo: 'COSTCO', 
+    imageLogo: '/logos/costco.svg' 
+  },
+  { 
+    name: 'Walmart', 
+    color: 'bg-sky-50 border-sky-200 text-sky-800', 
+    logo: 'Walmart', 
+    imageLogo: '/logos/walmart.svg' 
+  },
+  { 
+    name: 'No Frills', 
+    color: 'bg-yellow-50 border-yellow-300 text-yellow-900', 
+    logo: 'no frills', 
+    imageLogo: '/logos/nofrills.svg' 
+  },
+  { 
+    name: 'FreshCo', 
+    color: 'bg-emerald-50 border-emerald-300 text-emerald-900', 
+    logo: 'FreshCo.', 
+    imageLogo: '/logos/freshco.svg' 
+  },
+  { 
+    name: 'Shoppers Drug Mart', 
+    color: 'bg-rose-50 border-rose-200 text-rose-800', 
+    logo: 'SHOPPERS', 
+    imageLogo: '/logos/sdm.svg' 
+  },
+  { 
+    name: "Farmers' Market", 
+    color: 'bg-amber-100/80 border-amber-300 text-amber-950 shadow-sm', 
+    logo: "🌾 FARMERS' MARKET" 
+  },
+  { 
+    name: 'Asian Grocery', 
+    logo: 'ASIAN GROCERY', 
+    color: 'bg-gradient-to-r from-red-700 to-rose-900 text-white border-red-900 shadow-sm' 
+  },
+  { 
+    name: 'Indian Grocery', 
+    logo: 'INDIAN GROCERY', 
+    color: 'bg-gradient-to-r from-[#FF9933] via-[#FFFFFF] to-[#138808] text-slate-900 border-slate-300 shadow-sm'
+  },
+  { 
+    name: 'Other', 
+    color: 'bg-white border-slate-200 text-slate-600', 
+    logo: 'Other' 
+  }
 ];
 
 export const CATEGORY_NAMES = {
@@ -20,13 +66,13 @@ export const CATEGORY_NAMES = {
   PASTA_AND_NOODLES: 'Pasta & Noodles',
   BREAKFAST_AND_CEREAL: 'Breakfast & Cereal',
   COOKING_ESSENTIALS: 'Cooking Essentials',
+  NUTS_AND_SEEDS: 'Nuts & Seeds',
   DESSERT_AND_SNACKS: 'Dessert & Snacks',
   DRINKS_AND_BEVERAGES: 'Drinks & Beverages', 
   FROZEN: 'Frozen',
   HOUSEHOLD_AND_CLEANING: 'Household & Cleaning',
   PHARMACY_AND_PERSONAL_CARE: 'Pharmacy & Personal Care',
   BABY: 'Baby',
-  NUTS_AND_SPICES: 'Nuts & Spices',
   GENERAL: 'General'
 } as const;
 
@@ -39,41 +85,44 @@ export const CATEGORIES = [
   { name: CATEGORY_NAMES.PASTA_AND_NOODLES, icon: 'mdi:noodles' },
   { name: CATEGORY_NAMES.BREAKFAST_AND_CEREAL, icon: 'mdi:bowl' },
   { name: CATEGORY_NAMES.COOKING_ESSENTIALS, icon: 'mdi:shaker' },
+  { name: CATEGORY_NAMES.NUTS_AND_SEEDS, icon: 'mdi:peanut-outline' },
   { name: CATEGORY_NAMES.DESSERT_AND_SNACKS, icon: 'mdi:cookie' },
   { name: CATEGORY_NAMES.DRINKS_AND_BEVERAGES, icon: 'mdi:cup-water' }, 
   { name: CATEGORY_NAMES.FROZEN, icon: 'mdi:snowflake' },
   { name: CATEGORY_NAMES.HOUSEHOLD_AND_CLEANING, icon: 'mdi:broom' },
   { name: CATEGORY_NAMES.PHARMACY_AND_PERSONAL_CARE, icon: 'mdi:pill' },
   { name: CATEGORY_NAMES.BABY, icon: 'mdi:baby-carriage' },
-  { name: CATEGORY_NAMES.NUTS_AND_SPICES, icon: 'mdi:peanut' },
   { name: CATEGORY_NAMES.GENERAL, icon: 'mdi:shopping-outline' }
 ];
 
+// Uses Iconify vector icons so every category (including Nuts & Seeds) renders a distinct, recognizable icon
 export const getCategoryIcon = (category?: string): string => {
   switch (category?.trim()) {
-    case 'Produce': return 'eco';
-    case 'Dairy & Eggs': return 'water_drop';
-    case 'Meat & Seafood': return 'set_meal';
-    case 'Bakery': return 'bakery_dining';
-    case 'Frozen': return 'ac_unit';
-    case 'Drinks & Beverages': return 'local_drink';
-    case 'Household & Cleaning': return 'cleaning_services';
-    case 'Pharmacy & Personal Care': return 'medical_services';
-    case 'Dessert & Snacks': return 'cookie';
-    case 'Rice & Wheat': return 'rice_bowl'; 
-    case 'Pasta & Noodles': return 'ramen_dining'; 
-    case 'Breakfast & Cereal': return 'breakfast_dining'; 
-    case 'Cooking Essentials': return 'soup_kitchen'; 
-    case 'Baby': return 'child_care'; 
-    case 'Nuts & Spices': return 'grain';
-    case 'General': return 'shopping_bag';
-    default: return 'shopping_bag';
+    case 'Produce': return 'mdi:leaf';
+    case 'Dairy & Eggs': return 'mdi:water-outline';
+    case 'Meat & Seafood': return 'mdi:food-drumstick-outline';
+    case 'Bakery': return 'mdi:croissant';
+    case 'Frozen': return 'mdi:snowflake';
+    case 'Drinks & Beverages': return 'mdi:cup-water';
+    case 'Household & Cleaning': return 'mdi:broom';
+    case 'Pharmacy & Personal Care': return 'mdi:medical-bag';
+    case 'Dessert & Snacks': return 'mdi:cookie-outline';
+    case 'Rice & Wheat': return 'mdi:barley'; 
+    case 'Pasta & Noodles': return 'mdi:noodles'; 
+    case 'Breakfast & Cereal': return 'mdi:bowl-mix-outline'; 
+    case 'Cooking Essentials': return 'mdi:shaker-outline'; 
+    case 'Nuts & Seeds': return 'mdi:peanut-outline';
+    case 'Baby': return 'mdi:baby-face-outline'; 
+    case 'General': return 'mdi:shopping-outline';
+    default: return 'mdi:shopping-outline';
   }
 };
 
 export const getCategoryBgColor = (category?: string) => {
   if (!category) return 'bg-gray-100 border-gray-200 text-gray-600';
+  
   const cat = category.trim();
+  
   switch (cat) {
     case CATEGORY_NAMES.PRODUCE: return 'bg-emerald-100 border-emerald-200 text-emerald-800';
     case CATEGORY_NAMES.BAKERY: return 'bg-orange-100 border-orange-200 text-orange-800';
@@ -83,14 +132,14 @@ export const getCategoryBgColor = (category?: string) => {
     case CATEGORY_NAMES.PASTA_AND_NOODLES: return 'bg-red-50 border-red-200 text-red-700';
     case CATEGORY_NAMES.BREAKFAST_AND_CEREAL: return 'bg-teal-100 border-teal-200 text-teal-800';
     case CATEGORY_NAMES.COOKING_ESSENTIALS: return 'bg-amber-50 border-amber-200 text-amber-700';
+    case CATEGORY_NAMES.NUTS_AND_SEEDS: return 'bg-stone-200/80 border-amber-800/30 text-amber-950';
     case CATEGORY_NAMES.DESSERT_AND_SNACKS: return 'bg-indigo-100 border-indigo-200 text-indigo-800';
     case CATEGORY_NAMES.DRINKS_AND_BEVERAGES: return 'bg-cyan-100 border-cyan-200 text-cyan-800';
     case CATEGORY_NAMES.BABY: return 'bg-pink-100 border-pink-200 text-pink-800';
     case CATEGORY_NAMES.HOUSEHOLD_AND_CLEANING: return 'bg-slate-200 border-slate-300 text-slate-700';
     case CATEGORY_NAMES.PHARMACY_AND_PERSONAL_CARE: return 'bg-purple-100 border-purple-200 text-purple-800'; 
     case CATEGORY_NAMES.FROZEN: return 'bg-blue-100 border-blue-200 text-blue-800'; 
-    case CATEGORY_NAMES.NUTS_AND_SPICES: return 'bg-amber-700/10 border-amber-700/30 text-amber-900';
-    case CATEGORY_NAMES.GENERAL: return 'bg-stone-200 border-stone-300 text-stone-700';
+    case CATEGORY_NAMES.GENERAL: return 'bg-stone-100 border-stone-300 text-stone-700';
     default: return 'bg-gray-50 border-gray-200 text-gray-500';
   }
 };
@@ -98,23 +147,33 @@ export const getCategoryBgColor = (category?: string) => {
 export const getItemIcon = (name: string, category?: string): string => {
   const n = name.toLowerCase().trim();
 
+  // ==========================================
+  // SPECIFIC BRANDS & KEYWORDS (HIGHEST PRIORITY)
+  // ==========================================
   if (n.includes('coke') || n.includes('cola') || n.includes('pepsi')) return 'fluent-emoji-flat:bottle-with-popping-cork';
   if (n.includes('shrimp') || n.includes('prawn')) return 'fluent-emoji-flat:shrimp';
   if (n.includes('diaper') || n.includes('nappy')) return 'fluent-emoji-flat:baby-symbol';
   
-  if (n.includes('nut') || n.includes('almond') || n.includes('cashew') || n.includes('peanut')) return 'fluent-emoji-flat:peanuts';
-  if (n.includes('spice') || n.includes('pepper') || n.includes('cinnamon') || n.includes('salt') || n.includes('masala')) return 'fluent-emoji-flat:salt';
+  // Nuts & Seeds specific icons
+  if (n.includes('pistachio') || n.includes('cashew') || n.includes('almond') || n.includes('walnut') || n.includes('pecan') || n.includes('peanut') || n.includes('nut')) return 'fluent-emoji-flat:peanuts';
+  if (n.includes('chestnut') || n.includes('hazelnut')) return 'fluent-emoji-flat:chestnut';
+  if (n.includes('chia') || n.includes('flax') || n.includes('hemp') || n.includes('pumpkin seed') || n.includes('sunflower seed') || n.includes('sesame') || n.includes('seed')) return 'fluent-emoji-flat:seedling';
 
+  // Cooking Essentials & Spices
+  if (n.includes('salt') || n.includes('spice') || n.includes('masala') || n.includes('turmeric') || n.includes('cumin') || n.includes('pepper') || n.includes('cinnamon') || n.includes('cardamom')) return 'fluent-emoji-flat:salt';
   if (n.includes('sugar')) return 'mdi:cube-outline';
   if (n.includes('paneer') || n.includes('cottage cheese')) return 'fluent-emoji-flat:cheese-wedge';
   if (n.includes('honey')) return 'fluent-emoji-flat:honey-pot';
   if (n.includes('breakfast')) return 'fluent-emoji-flat:shallow-pan-of-food';
   if (n.includes('fruit')) return 'game-icons:fruit-bowl';
   if (n.includes('cake')) return 'fluent-emoji-flat:shortcake';
-  if (n.includes('flour') || n.includes('aata') || n.includes('besan')) return 'game-icons:flour';
+  if (n.includes('flour') || n.includes('aata') || n.includes('atta') || n.includes('besan')) return 'game-icons:flour';
   if (n.includes('baking powder') || n.includes('baking soda')) return 'fluent-emoji-flat:salt';
   if (n === 'drinks' || n.includes('drink')) return 'fluent-emoji-flat:cup-with-straw';
 
+  // ==========================================
+  // PRODUCE 
+  // ==========================================
   if (n.includes('onion')) return 'fluent-emoji-flat:onion';
   if (n.includes('tomato')) return 'fluent-emoji-flat:tomato';
   if (n.includes('potato')) return 'fluent-emoji-flat:potato';
@@ -134,6 +193,9 @@ export const getItemIcon = (name: string, category?: string): string => {
   if (n.includes('clementine') || n.includes('tangerine') || n.includes('mandarin')) return 'fluent-emoji-flat:tangerine';
   if (n.includes('coconut')) return 'fluent-emoji-flat:coconut';
 
+  // ==========================================
+  // BAKERY, GRAINS & PANTRY
+  // ==========================================
   if (n.includes('bread') || n.includes('sourdough')) return 'fluent-emoji-flat:bread';
   if (n.includes('bagel')) return 'fluent-emoji-flat:bagel';
   if (n.includes('croissant')) return 'fluent-emoji-flat:croissant';
@@ -144,30 +206,51 @@ export const getItemIcon = (name: string, category?: string): string => {
   if (n.includes('cookies') || n.includes('cookie') || n.includes('biscuit')) return 'fluent-emoji-flat:cookie';
   if (n.includes('soy sauce') || n.includes('soya sauce')) return 'fluent-emoji-flat:sake';
   
+  // ==========================================
+  // DAIRY & EGGS
+  // ==========================================
   if (n.includes('milk') || n.includes('creamer')) return 'fluent-emoji-flat:glass-of-milk';
   if (n.includes('egg')) return 'fluent-emoji-flat:egg';
   if (n.includes('cheese')) return 'fluent-emoji-flat:cheese-wedge';
   if (n.includes('butter')) return 'fluent-emoji-flat:butter';
   if (n.includes('yogurt')) return 'fluent-emoji-flat:cup-with-straw';
 
+  // ==========================================
+  // DRINKS & BEVERAGES
+  // ==========================================
   if (n.includes('coffee') || n.includes('tea')) return 'fluent-emoji-flat:hot-beverage';
   if (n.includes('juice')) return 'fluent-emoji-flat:beverage-box';
   if (n.includes('water') || n.includes('soda') || n.includes('beer') || n.includes('wine') || n.includes('beverage')) return 'fluent-emoji-flat:cup-with-straw';
 
+  // ==========================================
+  // MEAT & SEAFOOD
+  // ==========================================
   if (n.includes('chicken') || n.includes('poultry')) return 'fluent-emoji-flat:poultry-leg';
   if (n.includes('beef') || n.includes('steak') || n.includes('meat')) return 'fluent-emoji-flat:cut-of-meat';
   if (n.includes('fish') || n.includes('salmon')) return 'fluent-emoji-flat:fish';
   if (n.includes('mutton') || n.includes('lamb')) return 'fluent-emoji-flat:meat-on-bone';
 
+  // ==========================================
+  // HOUSEHOLD & PHARMACY
+  // ==========================================
   if (n.includes('soap')) return 'fluent-emoji-flat:soap';
   if (n.includes('paper') || n.includes('tissue') || n.includes('towel')) return 'fluent-emoji-flat:roll-of-paper';
   if (n.includes('pill') || n.includes('med') || n.includes('vitamin')) return 'fluent-emoji-flat:pill';
 
+  // ==========================================
+  // BABY
+  // ==========================================
   if (n.includes('baby')) return 'fluent-emoji-flat:baby-symbol';
 
+  // ==========================================
+  // FROZEN
+  // ==========================================
   if (n.includes('ice cream')) return 'fluent-emoji-flat:ice-cream';
   if (n.includes('frozen')) return 'fluent-emoji-flat:snowflake';
 
+  // ==========================================
+  // CATEGORY FALLBACKS
+  // ==========================================
   if (category) {
     switch (category) {
       case CATEGORY_NAMES.PRODUCE: return 'mdi:leaf';
@@ -178,13 +261,13 @@ export const getItemIcon = (name: string, category?: string): string => {
       case CATEGORY_NAMES.PASTA_AND_NOODLES: return 'mdi:noodles';
       case CATEGORY_NAMES.BREAKFAST_AND_CEREAL: return 'mdi:bowl';
       case CATEGORY_NAMES.COOKING_ESSENTIALS: return 'mdi:shaker';
+      case CATEGORY_NAMES.NUTS_AND_SEEDS: return 'fluent-emoji-flat:peanuts';
       case CATEGORY_NAMES.DESSERT_AND_SNACKS: return 'mdi:cookie';
       case CATEGORY_NAMES.DRINKS_AND_BEVERAGES: return 'mdi:cup-water';
       case CATEGORY_NAMES.FROZEN: return 'mdi:snowflake';
       case CATEGORY_NAMES.HOUSEHOLD_AND_CLEANING: return 'mdi:broom';
       case CATEGORY_NAMES.PHARMACY_AND_PERSONAL_CARE: return 'mdi:pill';
       case CATEGORY_NAMES.BABY: return 'mdi:baby-carriage';
-      case CATEGORY_NAMES.NUTS_AND_SPICES: return 'mdi:peanut';
       case CATEGORY_NAMES.GENERAL: return 'mdi:shopping-outline';
     }
   }
