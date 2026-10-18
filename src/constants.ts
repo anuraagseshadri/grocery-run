@@ -36,9 +36,9 @@ export const STORE_OPTIONS = [
     imageLogo: '/logos/sdm.svg' 
   },
   { 
-    name: 'Other', 
-    color: 'bg-white border-slate-200 text-slate-600', 
-    logo: 'Other' 
+    name: "Farmers' Market", 
+    color: 'bg-emerald-50 border-emerald-300 text-emerald-900 shadow-sm', 
+    logo: "🌾 FARMERS' MARKET" 
   },
   { 
     name: 'Asian Grocery', 
@@ -49,6 +49,11 @@ export const STORE_OPTIONS = [
     name: 'Indian Grocery', 
     logo: ' INDIAN GROCERY', 
     color: 'bg-gradient-to-r from-[#FF9933] via-[#FFFFFF] to-[#138808] text-slate-900 border-slate-300 shadow-sm'
+  },
+  { 
+    name: 'Other', 
+    color: 'bg-white border-slate-200 text-slate-600', 
+    logo: 'Other' 
   }
 ];
 
@@ -87,6 +92,27 @@ export const CATEGORIES = [
   { name: CATEGORY_NAMES.BABY, icon: 'mdi:baby-carriage' },
   { name: CATEGORY_NAMES.GENERAL, icon: 'mdi:shopping-outline' }
 ];
+
+export const getCategoryIcon = (category?: string): string => {
+  switch (category?.trim()) {
+    case 'Produce': return 'eco';
+    case 'Dairy & Eggs': return 'water_drop';
+    case 'Meat & Seafood': return 'set_meal';
+    case 'Bakery': return 'bakery_dining';
+    case 'Frozen': return 'ac_unit';
+    case 'Drinks & Beverages': return 'local_drink';
+    case 'Household & Cleaning': return 'cleaning_services';
+    case 'Pharmacy & Personal Care': return 'medical_services';
+    case 'Dessert & Snacks': return 'cookie';
+    case 'Rice & Wheat': return 'rice_bowl'; 
+    case 'Pasta & Noodles': return 'ramen_dining'; 
+    case 'Breakfast & Cereal': return 'breakfast_dining'; 
+    case 'Cooking Essentials': return 'soup_kitchen'; 
+    case 'Baby': return 'child_care'; 
+    case 'General': return 'shopping_bag';
+    default: return 'shopping_bag';
+  }
+};
 
 export const getCategoryBgColor = (category?: string) => {
   if (!category) return 'bg-gray-100 border-gray-200 text-gray-600';

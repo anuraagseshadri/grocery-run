@@ -1,28 +1,7 @@
 import React from 'react';
 import { Icon } from '@iconify/react';
-import { getItemIcon, getCategoryBgColor } from '../constants';
+import { getItemIcon, getCategoryBgColor, getCategoryIcon } from '../constants';
 import { LuCheck, LuTrash2, LuUndo } from 'react-icons/lu';
-
-const getCategoryIcon = (category?: string) => {
-  switch(category?.trim()) {
-    case 'Produce': return 'eco';
-    case 'Dairy & Eggs': return 'water_drop';
-    case 'Meat & Seafood': return 'set_meal';
-    case 'Bakery': return 'bakery_dining';
-    case 'Frozen': return 'ac_unit';
-    case 'Drinks & Beverages': return 'local_drink';
-    case 'Household & Cleaning': return 'cleaning_services';
-    case 'Pharmacy & Personal Care': return 'medical_services';
-    case 'Dessert & Snacks': return 'cookie';
-    case 'Rice & Wheat': return 'rice_bowl'; 
-    case 'Pasta & Noodles': return 'ramen_dining'; 
-    case 'Breakfast & Cereal': return 'breakfast_dining'; 
-    case 'Cooking Essentials': return 'soup_kitchen'; 
-    case 'Baby': return 'child_care'; 
-    case 'General': return 'shopping_bag';
-    default: return 'shopping_bag';
-  }
-};
 
 interface ItemCardProps {
   id: string | number;
@@ -50,6 +29,42 @@ export function ItemCard({
   
   const isListMode = viewMode === 'list';
 
+  // CART RECEIPT MODE (Stitch Revamp)
+  if (!isListMode) {
+    return (
+      <div className="bg-white rounded-xl p-3 shadow-sm border border-slate-100/90 flex items-center justify-between gap-3 transition-all">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="w-10 h-10 rounded-xl bg-[#F4FAF6] border border-emerald-100/80 flex items-center justify-center text-xl shrink-0">
+            <Icon icon={getItemIcon(name, category)} />
+          </div>
+          <div className="flex flex-col min-w-0 flex-1">
+            <h4 className="text-sm font-headline font-bold text-slate-800 truncate leading-snug">
+              {name}
+            </h4>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className={`inline-flex items-center gap-1 text-[10px] font-label font-semibold px-2 py-0.5 rounded-md border whitespace-nowrap ${getCategoryBgColor(category)}`}>
+                <span className="material-symbols-outlined text-[12px] leading-none">
+                  {getCategoryIcon(category)}
+                </span>
+                <span>{category || 'General'}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <button 
+          onClick={() => onToggleCart(id, inCart)} 
+          className="p-2 text-slate-400 hover:text-primary hover:bg-emerald-50 rounded-full transition-colors shrink-0"
+          title="Move back to list"
+          aria-label={`Return ${name} to list`}
+        >
+          <LuUndo className="text-lg" />
+        </button>
+      </div>
+    );
+  }
+
+  // STANDARD LIST MODE
   return (
     <div className={`relative w-full p-4 rounded-xl border transition-all duration-300 flex flex-col gap-1 ${
       isListMode && inCart 
@@ -62,16 +77,14 @@ export function ItemCard({
         {/* LEFT SIDE: Checkbox, Icon, Name, and Tracking Badge */}
         <div className="flex items-center gap-3 flex-1 min-w-0">
           
-          {isListMode && (
-            <button 
-              onClick={() => onToggleCart(id, inCart)}
-              className={`w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
-                inCart ? 'border-primary bg-primary' : 'border-slate-300 bg-white'
-              }`}
-            >
-              {inCart && <LuCheck className="text-white text-sm stroke-[3px]" />}
-            </button>
-          )}
+          <button 
+            onClick={() => onToggleCart(id, inCart)}
+            className={`w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
+              inCart ? 'border-primary bg-primary' : 'border-slate-300 bg-white'
+            }`}
+          >
+            {inCart && <LuCheck className="text-white text-sm stroke-[3px]" />}
+          </button>
 
           <div className={`text-2xl shrink-0 transition-all ${
             isListMode && inCart ? 'grayscale opacity-50' : 'text-primary'
@@ -94,7 +107,7 @@ export function ItemCard({
             </button>
 
             {/* TRACKING BADGES: Stacked beneath name */}
-            {isListMode && !inCart && (
+            {!inCart && (
               <div className="mt-0.5">
                 {trackHabit !== false ? (
                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-[#DCEDE0] text-[#006d30] font-bold text-[9px] cursor-default">
@@ -114,35 +127,20 @@ export function ItemCard({
 
         {/* RIGHT SIDE: Category Tag & Actions */}
         <div className="flex items-center gap-2 shrink-0">
-          
-          {isListMode && (
-            <div className={`flex items-center gap-1 text-[10px] font-label px-2 py-1 rounded-md border shrink-0 transition-all ${
-               isListMode && inCart ? 'opacity-50 grayscale' : ''
-            } ${getCategoryBgColor(category)}`}>
-              
-              <span className="material-symbols-outlined text-[14px] leading-none">
-                {getCategoryIcon(category)}
-              </span>
-              
-              <span className="whitespace-nowrap">{category || 'Other'}</span>
-            </div>
-          )}
+          <div className={`flex items-center gap-1 text-[10px] font-label px-2 py-1 rounded-md border shrink-0 transition-all ${
+             inCart ? 'opacity-50 grayscale' : ''
+          } ${getCategoryBgColor(category)}`}>
+            <span className="material-symbols-outlined text-[14px] leading-none">
+              {getCategoryIcon(category)}
+            </span>
+            <span className="whitespace-nowrap">{category || 'Other'}</span>
+          </div>
 
-          {isListMode ? (
-            <button onClick={() => onDelete(id)} className={`p-2 hover:bg-red-50 rounded-full transition-colors shrink-0 ${
-              isListMode && inCart ? 'text-red-300 hover:text-red-500' : 'text-red-400 hover:text-red-600'
-            }`}>
-              <LuTrash2 className="text-xl" />
-            </button>
-          ) : (
-            <button 
-              onClick={() => onToggleCart(id, inCart)} 
-              className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors shrink-0"
-              title="Move back to list"
-            >
-              <LuUndo className="text-xl" />
-            </button>
-          )}
+          <button onClick={() => onDelete(id)} className={`p-2 hover:bg-red-50 rounded-full transition-colors shrink-0 ${
+            inCart ? 'text-red-300 hover:text-red-500' : 'text-red-400 hover:text-red-600'
+          }`}>
+            <LuTrash2 className="text-xl" />
+          </button>
         </div>
 
       </div>

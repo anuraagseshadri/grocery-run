@@ -92,6 +92,10 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showStaleCartWarning, setShowStaleCartWarning] = useState(false);
 
+  // Exclusive Accordion state & live clock tick for the Cart screen
+  const [expandedCartStore, setExpandedCartStore] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+
   const [habitSearchQuery, setHabitSearchQuery] = useState('');
   const [habitTab, setHabitTab] = useState<'tracked' | 'untracked'>('tracked');
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
@@ -253,6 +257,7 @@ export default function App() {
   const handleToggleCart = (id: string, currentState: boolean) => {
     setToastMessage(!currentState ? "Moved to Cart" : "Moved back to List");
     setHasDismissedReminder(false); 
+    setNowTick(Date.now());
 
     const payload: Partial<GroceryItem> = { inCart: !currentState };
     payload.cartedAt = !currentState ? new Date().toISOString() : null; 
@@ -311,6 +316,7 @@ export default function App() {
   const handleFinishRun = () => {
     if (!user) return;
     const cartItems = items.filter(item => item.inCart);
+    if (cartItems.length === 0) return;
     const checkoutTime = new Date().toISOString();
 
     if (analytics) {
@@ -393,6 +399,14 @@ export default function App() {
   const listTabItems = items;
   const cartTabItems = items.filter(item => item.inCart);
 
+  // Refresh timer every 30s when viewing a non-empty Cart
+  useEffect(() => {
+    if (activeTab !== 'cart' || cartTabItems.length === 0) return;
+    setNowTick(Date.now());
+    const interval = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(interval);
+  }, [activeTab, cartTabItems.length]);
+
   useEffect(() => {
     const checkStaleItems = () => {
       if (cartTabItems.length === 0 || hasDismissedReminder) {
@@ -424,6 +438,62 @@ export default function App() {
     groups[storeName].push(item);
     return groups;
   }, {} as Record<string, GroceryItem[]>);
+
+  // Group Cart items by store for the Multi-Store Accordion
+  const cartGroupedByStore = useMemo(() => {
+    return cartTabItems.reduce((groups, item) => {
+      const rawStore = item.store?.trim() || 'Other';
+      const officialStore = STORE_OPTIONS.find(
+        s => s.name.toLowerCase() === rawStore.toLowerCase()
+      );
+      const storeName = officialStore ? officialStore.name : 'Other';
+
+      if (!groups[storeName]) { groups[storeName] = []; }
+      groups[storeName].push(item);
+      return groups;
+    }, {} as Record<string, GroceryItem[]>);
+  }, [cartTabItems]);
+
+  const cartStoreNames = useMemo(() => Object.keys(cartGroupedByStore).sort(), [cartGroupedByStore]);
+
+  // Keep exclusive accordion synced: auto-select first store when cart populates or active store empties
+  useEffect(() => {
+    if (cartStoreNames.length === 0) {
+      setExpandedCartStore(null);
+    } else if (!expandedCartStore || !cartStoreNames.includes(expandedCartStore)) {
+      setExpandedCartStore(cartStoreNames[0]);
+    }
+  }, [cartStoreNames, expandedCartStore]);
+
+  // Smart Shopping Run Duration & Status calculation
+  const cartRunTelemetry = useMemo(() => {
+    if (cartTabItems.length === 0) {
+      return { isActive: false, isPaused: false, durationLabel: null };
+    }
+
+    const validTimestamps = cartTabItems
+      .map(i => (i.cartedAt ? new Date(i.cartedAt).getTime() : NaN))
+      .filter(t => !isNaN(t));
+
+    if (validTimestamps.length === 0) {
+      return { isActive: true, isPaused: false, durationLabel: null };
+    }
+
+    const firstCartedTime = Math.min(...validTimestamps);
+    const elapsedMs = Math.max(0, nowTick - firstCartedTime);
+    const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+
+    if (elapsedMs >= THREE_HOURS_MS) {
+      return { isActive: false, isPaused: true, durationLabel: null };
+    }
+
+    const totalMinutes = Math.max(1, Math.round(elapsedMs / 60000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const durationLabel = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+
+    return { isActive: true, isPaused: false, durationLabel };
+  }, [cartTabItems, nowTick]);
 
   const habitsDashboardData = useMemo(() => {
     const itemHistory: Record<string, { itemData: GroceryItem, latestOrderTime: number, history: {date: number, store: string}[], count: number, isTracked: boolean }> = {};
@@ -612,7 +682,12 @@ export default function App() {
   }
 
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab} userEmail={user.email}>
+    <Layout 
+      activeTab={activeTab} 
+      setActiveTab={setActiveTab} 
+      userEmail={user.email}
+      cartCount={cartTabItems.length}
+    >
       
       {showStaleCartWarning && (
         <div className="fixed top-4 left-4 right-4 z-50 animate-fade-in">
@@ -718,7 +793,7 @@ export default function App() {
                     </div>
                   ) : (
                     <div className={`flex items-center px-4 py-3 rounded-xl border shadow-sm font-headline font-bold uppercase tracking-wider text-sm ${officialStore?.color || 'bg-white text-slate-600 border-slate-200'}`}>
-                      <span>{officialStore?.name || storeName || 'Other'}</span>
+                      <span>{officialStore?.logo || officialStore?.name || storeName || 'Other'}</span>
                       <div className="ml-auto bg-black/5 px-2.5 py-1 rounded-md flex items-center justify-center">
                         <span className="text-xs font-bold">{itemsInStore.length}</span>
                       </div>
@@ -762,28 +837,173 @@ export default function App() {
         )}
 
         {activeTab === 'cart' && (
-          <div className="flex flex-col gap-3 mt-2">
-            <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">Run Summary</h2>
-            {cartTabItems.map((item: GroceryItem) => (
-              <ItemCard 
-                key={item.id} 
-                id={item.id} 
-                name={item.name} 
-                category={item.category || 'Unknown'} 
-                inCart={item.inCart} 
-                viewMode="cart" 
-                trackHabit={item.trackHabit}
-                onToggleCart={handleToggleCart} 
-                onDelete={handleDeleteItem} 
-              />
-            ))}
-            <button 
-              onClick={handleFinishRun}
-              className="mt-6 w-full bg-[#d3e3d8] text-[#174525] font-headline font-bold py-4 rounded-xl shadow-sm border border-[#b8d0c0] hover:bg-[#c2d6cb] transition-all flex justify-center items-center gap-2 active:scale-95"
-            >
-              <span className="material-symbols-outlined text-xl">check_circle</span>
-              Finish Run
-            </button>
+          <div className="flex flex-col gap-4 mt-1 animate-fade-in">
+            {/* Page Title & Live Status Subtitle */}
+            <section className="px-1">
+              <h2 className="text-2xl font-headline font-black text-slate-900 tracking-tight leading-none">
+                Run Summary
+              </h2>
+              {cartTabItems.length > 0 && (
+                <div className="flex items-center flex-wrap gap-2 mt-2 text-xs text-slate-600 font-medium">
+                  {cartRunTelemetry.isPaused ? (
+                    <span className="inline-flex items-center text-amber-800 bg-amber-100/80 px-2.5 py-0.5 rounded-full font-semibold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>
+                      Run Paused
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full font-semibold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
+                      Cart Active
+                    </span>
+                  )}
+
+                  <span>•</span>
+                  <span>
+                    {cartStoreNames.length} {cartStoreNames.length === 1 ? 'Store' : 'Stores'}
+                  </span>
+
+                  {cartRunTelemetry.durationLabel && (
+                    <>
+                      <span>•</span>
+                      <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
+                        <span className="material-symbols-outlined text-[14px] text-emerald-700">schedule</span>
+                        {cartRunTelemetry.durationLabel}
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {cartTabItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center pt-16 pb-8 text-center px-4 animate-fade-in">
+                <div className="w-24 h-24 bg-surface-container-high rounded-full flex items-center justify-center mb-6">
+                  <span className="material-symbols-outlined text-5xl text-on-surface-variant/40">shopping_cart_checkout</span>
+                </div>
+                <h3 className="text-xl font-headline font-bold text-on-surface mb-2">Your cart is empty</h3>
+                <p className="text-sm text-slate-500 max-w-xs">
+                  Check off items from your List as you shop to review your run summary here.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Cart Overview Banner */}
+                <section className="bg-white rounded-2xl p-4 shadow-sm border border-emerald-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-700 border border-emerald-100 shrink-0">
+                      <span className="material-symbols-outlined text-xl">shopping_cart</span>
+                    </div>
+                    <div>
+                      <div className="text-sm font-headline font-bold text-slate-900">Cart Overview</div>
+                      <div className="text-xs text-slate-500 font-medium mt-0.5">
+                        {cartTabItems.length} {cartTabItems.length === 1 ? 'item' : 'items'} ready across {cartStoreNames.length} {cartStoreNames.length === 1 ? 'store' : 'stores'}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100 shrink-0">
+                    {cartStoreNames.length} {cartStoreNames.length === 1 ? 'Store' : 'Stores'}
+                  </span>
+                </section>
+
+                {/* Exclusive Multi-Store Accordions */}
+                <div className="flex flex-col gap-3">
+                  {cartStoreNames.map((storeName) => {
+                    const itemsInStore = cartGroupedByStore[storeName];
+                    const officialStore = STORE_OPTIONS.find(
+                      s => s.name.toLowerCase() === storeName.toLowerCase()
+                    );
+                    const isExpanded = expandedCartStore === storeName;
+
+                    const categoryOrder = CATEGORIES.reduce((acc, cat, index) => {
+                      acc[cat.name] = index;
+                      return acc;
+                    }, {} as Record<string, number>);
+
+                    const sortedStoreItems = [...itemsInStore].sort((a, b) => {
+                      const orderA = categoryOrder[a.category || ''] ?? 99;
+                      const orderB = categoryOrder[b.category || ''] ?? 99;
+                      return orderA - orderB;
+                    });
+
+                    return (
+                      <div 
+                        key={storeName} 
+                        className={`bg-white rounded-2xl border transition-all duration-200 overflow-hidden shadow-sm ${
+                          isExpanded ? 'border-emerald-300 ring-2 ring-emerald-100/60' : 'border-emerald-100'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setExpandedCartStore(isExpanded ? null : storeName)}
+                          className="w-full p-4 flex items-center justify-between bg-white hover:bg-emerald-50/40 transition-colors text-left select-none"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {officialStore?.imageLogo ? (
+                              <div className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white flex items-center justify-center shrink-0">
+                                <img 
+                                  src={officialStore.imageLogo}
+                                  alt={storeName} 
+                                  className="h-5 max-w-[95px] object-contain object-left" 
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                              </div>
+                            ) : (
+                              <span className={`px-3 py-1 rounded-lg border font-headline font-bold uppercase tracking-wider text-xs shrink-0 ${officialStore?.color || 'bg-white text-slate-600 border-slate-200'}`}>
+                                {officialStore?.logo || officialStore?.name || storeName}
+                              </span>
+                            )}
+
+                            <span className="text-xs text-slate-500 font-semibold truncate">
+                              {itemsInStore.length} {itemsInStore.length === 1 ? 'item' : 'items'}
+                            </span>
+                          </div>
+
+                          <span className={`w-7 h-7 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 transition-transform duration-200 shrink-0 ${
+                            isExpanded ? 'rotate-180 bg-emerald-50 text-emerald-700' : ''
+                          }`}>
+                            <span className="material-symbols-outlined text-[18px]">expand_more</span>
+                          </span>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="border-t border-slate-100 p-3 flex flex-col gap-2 bg-[#F4FAF6]/60">
+                            {sortedStoreItems.map((item: GroceryItem) => (
+                              <ItemCard 
+                                key={item.id} 
+                                id={item.id} 
+                                name={item.name} 
+                                category={item.category || 'General'} 
+                                inCart={item.inCart} 
+                                viewMode="cart" 
+                                trackHabit={item.trackHabit}
+                                onToggleCart={handleToggleCart} 
+                                onDelete={handleDeleteItem} 
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Single Primary CTA */}
+                <div className="pt-2 pb-4">
+                  <button 
+                    onClick={handleFinishRun}
+                    className="w-full py-4 px-6 bg-[#00A86B] hover:bg-[#059669] text-white rounded-2xl font-headline font-extrabold shadow-lg shadow-emerald-600/20 active:scale-[0.98] transition-all flex flex-col items-center justify-center"
+                  >
+                    <div className="flex items-center gap-2 text-base">
+                      <span className="material-symbols-outlined text-xl">check_circle</span>
+                      <span>Finish Run</span>
+                    </div>
+                    <span className="text-[11px] text-emerald-100 font-medium tracking-normal mt-0.5">
+                      Save purchase &amp; log to Habits
+                    </span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 

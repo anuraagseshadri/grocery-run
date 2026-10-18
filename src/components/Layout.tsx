@@ -9,9 +9,10 @@ interface LayoutProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   userEmail?: string | null;
+  cartCount?: number;
 }
 
-export function Layout({ children, activeTab, setActiveTab, userEmail }: LayoutProps) {
+export function Layout({ children, activeTab, setActiveTab, userEmail, cartCount = 0 }: LayoutProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const handleSignOut = async () => {
@@ -77,13 +78,13 @@ export function Layout({ children, activeTab, setActiveTab, userEmail }: LayoutP
         </div>
       </header>
 
-      {/* FIXED: Replaced standard py-6 with pb-32 to clear the safe-area nav bars completely */}
+      {/* MAIN CONTENT */}
       <main className="px-4 pt-6 pb-32 max-w-2xl mx-auto min-h-screen">
         {children}
       </main>
 
       {/* FOOTER NAV */}
-      <nav className="fixed bottom-0 w-full bg-white pb-safe pt-2 px-6 flex justify-around items-center z-50">
+      <nav className="fixed bottom-0 w-full bg-white pb-safe pt-2 px-6 flex justify-around items-center z-50 border-t border-slate-100">
         <NavButton 
           icon="list" 
           label="List" 
@@ -93,6 +94,7 @@ export function Layout({ children, activeTab, setActiveTab, userEmail }: LayoutP
         <NavButton 
           icon="shopping_cart" 
           label="Cart" 
+          badgeCount={cartCount}
           isActive={activeTab === 'cart'} 
           onClick={() => setActiveTab('cart')} 
         />
@@ -108,20 +110,39 @@ export function Layout({ children, activeTab, setActiveTab, userEmail }: LayoutP
 }
 
 // Sub-component for the buttons
-function NavButton({ icon, label, isActive, onClick }: { icon: string, label: string, isActive: boolean, onClick: () => void }) {
+function NavButton({ 
+  icon, 
+  label, 
+  isActive, 
+  badgeCount = 0, 
+  onClick 
+}: { 
+  icon: string; 
+  label: string; 
+  isActive: boolean; 
+  badgeCount?: number; 
+  onClick: () => void; 
+}) {
   return (
     <button 
       onClick={onClick} 
       aria-pressed={isActive} 
-      className={`flex flex-col items-center p-2 min-w-[64px] transition-colors ${isActive ? 'text-primary' : 'text-on-surface-variant'}`}
+      className={`relative flex flex-col items-center p-2 min-w-[64px] transition-colors ${isActive ? 'text-primary' : 'text-on-surface-variant'}`}
     >
-      <span 
-        className="material-symbols-outlined" 
-        aria-hidden="true" 
-        style={{ fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }}
-      >
-        {icon}
-      </span>
+      <div className="relative flex items-center justify-center">
+        <span 
+          className="material-symbols-outlined" 
+          aria-hidden="true" 
+          style={{ fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }}
+        >
+          {icon}
+        </span>
+        {badgeCount > 0 && (
+          <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 bg-emerald-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white shadow-sm">
+            {badgeCount}
+          </span>
+        )}
+      </div>
       <span className="text-xs font-label mt-1">{label}</span>
     </button>
   );
