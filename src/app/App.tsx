@@ -351,6 +351,23 @@ export default function App() {
     }
   };
 
+  // NEW: Completely wipe all purchase history to reset the Habits engine
+  const handlePurgeHabits = async () => {
+    if (!user) return;
+    if (!window.confirm("Are you sure you want to completely purge your Habit recommendations? This deletes your entire purchase history and cannot be undone.")) return;
+    
+    setToastMessage("Purging habit data...");
+    
+    try {
+      for (const order of purchaseHistory) {
+        await deleteDoc(doc(db, 'purchaseHistory', order.id));
+      }
+      setToastMessage("All habit recommendations have been successfully reset.");
+    } catch (err) {
+      setToastMessage("Failed to completely purge data. Check your connection.");
+    }
+  };
+
   const handleAddFromHabits = (habit: any, stayOnTab: boolean = false) => {
     if (!user) return;
     const nameKey = normalizeItemName(habit.name);
@@ -396,6 +413,19 @@ export default function App() {
   const listTabItems = items;
   const cartTabItems = items.filter(item => item.inCart);
 
+  // Derive autofill suggestions for AddItemForm based on past purchases and current items
+  const allKnownItems = useMemo(() => {
+    const set = new Set<string>();
+    Object.keys(DEFAULT_VELOCITY).forEach(i => set.add(i));
+    items.forEach(i => set.add(i.name.toLowerCase()));
+    purchaseHistory.forEach(order => {
+      order.items?.forEach((i: GroceryItem) => set.add((i.name || '').toLowerCase()));
+    });
+    return Array.from(set)
+      .filter(Boolean)
+      .map(name => name.charAt(0).toUpperCase() + name.slice(1));
+  }, [items, purchaseHistory]);
+
   useEffect(() => {
     if (activeTab !== 'cart' || cartTabItems.length === 0) return;
     setNowTick(Date.now());
@@ -423,7 +453,6 @@ export default function App() {
     return () => window.removeEventListener('focus', checkStaleItems);
   }, [cartTabItems, hasDismissedReminder]);
 
-  // Alphabetical grouping for the List screen
   const groupedByStore = listTabItems.reduce((groups, item) => {
     const rawStore = item.store?.trim() || 'Other';
     const officialStore = STORE_OPTIONS.find(
@@ -436,7 +465,6 @@ export default function App() {
     return groups;
   }, {} as Record<string, GroceryItem[]>);
 
-  // Group Cart items by store for the Cart screen
   const cartGroupedByStore = useMemo(() => {
     return cartTabItems.reduce((groups, item) => {
       const rawStore = item.store?.trim() || 'Other';
@@ -451,10 +479,8 @@ export default function App() {
     }, {} as Record<string, GroceryItem[]>);
   }, [cartTabItems]);
 
-  // Chronological sorting for the Cart screen
   const cartStoreNames = useMemo(() => {
     return Object.keys(cartGroupedByStore).sort((storeA, storeB) => {
-      // Find the oldest cartedAt timestamp for each store's items
       const getMinTime = (itemsArray: GroceryItem[]) => {
         const times = itemsArray.map(i => i.cartedAt ? new Date(i.cartedAt).getTime() : Date.now());
         return Math.min(...times);
@@ -801,7 +827,8 @@ export default function App() {
         {activeTab === 'list' && (
           <>
             <div className="flex flex-col gap-4">
-              <AddItemForm onAddItem={handleAddItem} />
+              {/* AddItemForm now receives suggestions to power the autofill dropdown */}
+              <AddItemForm onAddItem={handleAddItem} suggestions={allKnownItems} />
               <AddForm onAddItem={handleAddItem} />
             </div>
 
@@ -1090,7 +1117,7 @@ export default function App() {
         )}
 
         {activeTab === 'habits' && (
-          <div className="w-full flex flex-col gap-8 animate-fade-in">
+          <div className="w-full flex flex-col gap-8 animate-fade-in pb-10">
             <section>
               <div className="flex flex-col gap-4 mb-6">
                 <div className="flex items-center justify-between">
@@ -1215,7 +1242,6 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* 2x2 GRID WITH OFFICIAL STORE LOGO */}
                       <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm text-slate-600 mb-4 mt-4 bg-slate-50/50 rounded-xl p-3 border border-slate-100">
                         <div>
                           <span className="block text-[10px] uppercase tracking-wider font-bold text-slate-400">Purchases</span>
@@ -1247,7 +1273,6 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* INLINE CATEGORY PILL FOOTER */}
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
                         <span className={`w-fit inline-flex items-center gap-1 text-[10px] font-label font-bold px-2.5 py-1 rounded-md border whitespace-nowrap ${getCategoryBgColor(habit.category)}`}>
                           <span className="material-symbols-outlined text-[14px] leading-none">
@@ -1305,6 +1330,22 @@ export default function App() {
                   </div>
                 )}
               </div>
+
+              {/* DANGER ZONE: Purge Habit Data */}
+              {purchaseHistory.length > 0 && (
+                <div className="mt-6 pt-6 border-t border-slate-200 flex flex-col items-center">
+                  <p className="text-xs text-slate-400 mb-3 text-center px-4 max-w-xs">
+                    Need a clean slate? This will permanently delete your entire purchase history and reset all predictive restock data.
+                  </p>
+                  <button 
+                    onClick={handlePurgeHabits}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-xl font-bold text-sm hover:bg-red-50 active:scale-95 transition-all shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">delete_forever</span>
+                    Purge Habit Data
+                  </button>
+                </div>
+              )}
             </section>
           </div>
         )}
