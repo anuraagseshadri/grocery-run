@@ -324,6 +324,7 @@ export default function App() {
     }
 
     setHasDismissedReminder(false);
+    setExpandedCartStore(null);
     setToastMessage(`Run complete. ${cartItems.length === 1 ? 'Item' : 'Items'} added to Habits.`);
     setActiveTab('habits');
 
@@ -422,6 +423,7 @@ export default function App() {
     return () => window.removeEventListener('focus', checkStaleItems);
   }, [cartTabItems, hasDismissedReminder]);
 
+  // Alphabetical grouping for the List screen
   const groupedByStore = listTabItems.reduce((groups, item) => {
     const rawStore = item.store?.trim() || 'Other';
     const officialStore = STORE_OPTIONS.find(
@@ -434,6 +436,7 @@ export default function App() {
     return groups;
   }, {} as Record<string, GroceryItem[]>);
 
+  // Group Cart items by store for the Cart screen
   const cartGroupedByStore = useMemo(() => {
     return cartTabItems.reduce((groups, item) => {
       const rawStore = item.store?.trim() || 'Other';
@@ -448,13 +451,30 @@ export default function App() {
     }, {} as Record<string, GroceryItem[]>);
   }, [cartTabItems]);
 
-  const cartStoreNames = useMemo(() => Object.keys(cartGroupedByStore).sort(), [cartGroupedByStore]);
+  // Chronological sorting for the Cart screen
+  const cartStoreNames = useMemo(() => {
+    return Object.keys(cartGroupedByStore).sort((storeA, storeB) => {
+      // Find the oldest cartedAt timestamp for each store's items
+      const getMinTime = (itemsArray: GroceryItem[]) => {
+        const times = itemsArray.map(i => i.cartedAt ? new Date(i.cartedAt).getTime() : Date.now());
+        return Math.min(...times);
+      };
+      return getMinTime(cartGroupedByStore[storeA]) - getMinTime(cartGroupedByStore[storeB]);
+    });
+  }, [cartGroupedByStore]);
+
+  const cartCategoryBreakdown = useMemo(() => {
+    const counts: Record<string, number> = {};
+    cartTabItems.forEach(item => {
+      const cat = item.category?.trim() || 'General';
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [cartTabItems]);
 
   useEffect(() => {
-    if (cartStoreNames.length === 0) {
+    if (expandedCartStore && !cartStoreNames.includes(expandedCartStore)) {
       setExpandedCartStore(null);
-    } else if (!expandedCartStore || !cartStoreNames.includes(expandedCartStore)) {
-      setExpandedCartStore(cartStoreNames[0]);
     }
   }, [cartStoreNames, expandedCartStore]);
 
@@ -596,6 +616,12 @@ export default function App() {
         return b.totalPurchases - a.totalPurchases;
       } else if (habitSortFilter === 'az') {
         return a.name.localeCompare(b.name);
+      } else if (habitSortFilter === 'category') {
+        const catCompare = (a.category || 'General').localeCompare(b.category || 'General');
+        return catCompare !== 0 ? catCompare : a.name.localeCompare(b.name);
+      } else if (habitSortFilter === 'store') {
+        const storeCompare = (a.lastPurchasedStore || 'Other').localeCompare(b.lastPurchasedStore || 'Other');
+        return storeCompare !== 0 ? storeCompare : a.name.localeCompare(b.name);
       }
       return 0;
     });
@@ -608,6 +634,34 @@ export default function App() {
     if (tab === 'untracked' && habitSortFilter === 'urgency') {
       setHabitSortFilter('recent');
     }
+  };
+
+  const renderHabitStoreLogo = (rawStoreName?: string) => {
+    const cleanName = rawStoreName?.trim() || 'Other';
+    const officialStore = STORE_OPTIONS.find(
+      s => s.name.toLowerCase() === cleanName.toLowerCase()
+    );
+
+    if (officialStore?.imageLogo) {
+      return (
+        <div className="mt-1 flex items-center h-7">
+          <img 
+            src={officialStore.imageLogo} 
+            alt={officialStore.name} 
+            className="h-6 max-w-[125px] object-contain object-left" 
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="mt-1 flex items-center">
+        <span className={`inline-block px-2.5 py-0.5 rounded-md border text-[11px] font-headline font-bold uppercase tracking-wider truncate max-w-full ${officialStore?.color || 'bg-white border-slate-200 text-slate-700'}`}>
+          {officialStore?.logo || officialStore?.name || cleanName}
+        </span>
+      </div>
+    );
   };
 
   const suggestedReplenishments = useMemo(() => {
@@ -798,21 +852,21 @@ export default function App() {
                   const officialStore = STORE_OPTIONS.find(s => s.name.toLowerCase() === storeName.toLowerCase());
                   
                   const storeHeader = officialStore?.imageLogo ? (
-                    <div className={`flex items-center px-4 py-3 rounded-xl border shadow-sm ${officialStore.color || 'bg-white border-slate-200'}`}>
+                    <div className={`flex items-center px-4 py-3.5 rounded-xl border shadow-sm ${officialStore.color || 'bg-white border-slate-200'}`}>
                       <img 
                         src={officialStore.imageLogo}
                         alt={storeName} 
-                        className="h-5 sm:h-6 max-w-[100px] sm:max-w-[120px] object-contain object-left drop-shadow-sm" 
+                        className="h-7 sm:h-8 max-w-[140px] sm:max-w-[160px] object-contain object-left" 
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       />
-                      <div className="ml-auto bg-white/80 text-slate-800 px-2.5 py-1 rounded-md shadow-sm border border-slate-200/50 flex items-center justify-center backdrop-blur-sm">
+                      <div className="ml-auto bg-white/85 text-slate-900 px-2.5 py-1 rounded-md shadow-sm border border-slate-200/60 flex items-center justify-center backdrop-blur-sm">
                         <span className="text-xs font-bold">{itemsInStore.length}</span>
                       </div>
                     </div>
                   ) : (
-                    <div className={`flex items-center px-4 py-3 rounded-xl border shadow-sm font-headline font-bold uppercase tracking-wider text-sm ${officialStore?.color || 'bg-white text-slate-600 border-slate-200'}`}>
+                    <div className={`flex items-center px-4 py-3.5 rounded-xl border shadow-sm font-headline font-bold uppercase tracking-wider text-sm sm:text-base ${officialStore?.color || 'bg-white text-slate-600 border-slate-200'}`}>
                       <span>{officialStore?.logo || officialStore?.name || storeName || 'Other'}</span>
-                      <div className="ml-auto bg-white/60 text-slate-800 px-2.5 py-1 rounded-md shadow-sm border border-slate-200/50 flex items-center justify-center backdrop-blur-sm">
+                      <div className="ml-auto bg-white/85 text-slate-900 px-2.5 py-1 rounded-md shadow-sm border border-slate-200/60 flex items-center justify-center backdrop-blur-sm">
                         <span className="text-xs font-bold">{itemsInStore.length}</span>
                       </div>
                     </div>
@@ -906,21 +960,39 @@ export default function App() {
               </div>
             ) : (
               <>
-                <section className="bg-white rounded-2xl p-4 shadow-sm border border-emerald-100 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-700 border border-emerald-100 shrink-0">
-                      <span className="material-symbols-outlined text-xl">shopping_cart</span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-headline font-bold text-slate-900">Cart Overview</div>
-                      <div className="text-xs text-slate-500 font-medium mt-0.5">
-                        {cartTabItems.length} {cartTabItems.length === 1 ? 'item' : 'items'} ready across {cartStoreNames.length} {cartStoreNames.length === 1 ? 'store' : 'stores'}
+                <section className="bg-white rounded-2xl p-4 shadow-sm border border-emerald-100 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-700 border border-emerald-100 shrink-0">
+                        <span className="material-symbols-outlined text-xl">shopping_cart</span>
+                      </div>
+                      <div>
+                        <div className="text-sm font-headline font-bold text-slate-900">Cart Overview</div>
+                        <div className="text-xs text-slate-500 font-medium mt-0.5">
+                          {cartTabItems.length} {cartTabItems.length === 1 ? 'item' : 'items'} ready across {cartStoreNames.length} {cartStoreNames.length === 1 ? 'store' : 'stores'}
+                        </div>
                       </div>
                     </div>
+                    <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100 shrink-0">
+                      {cartStoreNames.length} {cartStoreNames.length === 1 ? 'Store' : 'Stores'}
+                    </span>
                   </div>
-                  <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100 shrink-0">
-                    {cartStoreNames.length} {cartStoreNames.length === 1 ? 'Store' : 'Stores'}
-                  </span>
+
+                  {cartCategoryBreakdown.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-2.5 border-t border-slate-100">
+                      {cartCategoryBreakdown.map(([catName, count]) => (
+                        <span 
+                          key={catName} 
+                          className={`inline-flex items-center gap-1 text-[10px] font-label font-bold px-2 py-0.5 rounded-md border ${getCategoryBgColor(catName)}`}
+                        >
+                          <span className="material-symbols-outlined text-[12px] leading-none">
+                            {getCategoryIcon(catName)}
+                          </span>
+                          <span>{catName}: {count}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </section>
 
                 <div className="flex flex-col gap-3">
@@ -952,38 +1024,37 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => setExpandedCartStore(isExpanded ? null : storeName)}
-                          className="w-full p-4 flex items-center justify-between text-left select-none hover:brightness-95 transition-all"
+                          className="w-full px-4 py-3.5 flex items-center justify-between text-left select-none hover:brightness-95 transition-all"
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             {officialStore?.imageLogo ? (
-                              <div className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center shrink-0">
-                                <img 
-                                  src={officialStore.imageLogo}
-                                  alt={storeName} 
-                                  className="h-5 max-w-[95px] object-contain object-left" 
-                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                />
-                              </div>
+                              <img 
+                                src={officialStore.imageLogo}
+                                alt={storeName} 
+                                className="h-7 sm:h-8 max-w-[140px] sm:max-w-[160px] object-contain object-left shrink-0" 
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              />
                             ) : (
-                              <span className="px-3 py-1 rounded-lg bg-white/50 border border-slate-200/50 font-headline font-bold uppercase tracking-wider text-xs shrink-0 text-slate-800 shadow-sm">
+                              <span className="font-headline font-bold uppercase tracking-wider text-sm sm:text-base shrink-0">
                                 {officialStore?.logo || officialStore?.name || storeName}
                               </span>
                             )}
-
-                            <span className="text-xs text-slate-800 font-bold truncate">
-                              {itemsInStore.length} {itemsInStore.length === 1 ? 'item' : 'items'}
-                            </span>
                           </div>
 
-                          <span className={`w-7 h-7 rounded-full bg-white/80 shadow-sm flex items-center justify-center text-slate-600 transition-transform duration-200 shrink-0 ${
-                            isExpanded ? 'rotate-180 text-primary' : ''
-                          }`}>
-                            <span className="material-symbols-outlined text-[18px]">expand_more</span>
-                          </span>
+                          <div className="flex items-center gap-2 shrink-0 ml-auto">
+                            <span className="bg-white/85 text-slate-900 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm border border-slate-200/60 backdrop-blur-sm">
+                              {itemsInStore.length} {itemsInStore.length === 1 ? 'item' : 'items'}
+                            </span>
+                            <span className={`w-7 h-7 rounded-full bg-white/85 shadow-sm flex items-center justify-center text-slate-700 transition-transform duration-200 shrink-0 ${
+                              isExpanded ? 'rotate-180 text-primary' : ''
+                            }`}>
+                              <span className="material-symbols-outlined text-[18px]">expand_more</span>
+                            </span>
+                          </div>
                         </button>
 
                         {isExpanded && (
-                          <div className="border-t border-slate-200/50 p-3 flex flex-col gap-2 bg-white/40 backdrop-blur-md">
+                          <div className="border-t border-slate-200/50 p-3 flex flex-col gap-2 bg-white/50 backdrop-blur-md">
                             {sortedStoreItems.map((item: GroceryItem) => (
                               <ItemCard 
                                 key={item.id} 
@@ -1094,6 +1165,8 @@ export default function App() {
                     {habitTab === 'tracked' && <option value="urgency">Restock Urgency</option>}
                     <option value="recent">Recently Bought</option>
                     <option value="frequent">Most Bought</option>
+                    <option value="category">Category</option>
+                    <option value="store">Store</option>
                     <option value="az">Alphabetical (A-Z)</option>
                   </select>
                 </div>
@@ -1142,7 +1215,7 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* NEW 2x2 GRID */}
+                      {/* 2x2 GRID WITH OFFICIAL STORE LOGO */}
                       <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-sm text-slate-600 mb-4 mt-4 bg-slate-50/50 rounded-xl p-3 border border-slate-100">
                         <div>
                           <span className="block text-[10px] uppercase tracking-wider font-bold text-slate-400">Purchases</span>
@@ -1168,25 +1241,23 @@ export default function App() {
                           <span className="block text-[10px] uppercase tracking-wider font-bold text-slate-400">Last Bought</span>
                           <span className="font-bold text-slate-800 text-lg">{habit.daysSinceLast !== null ? `${habit.daysSinceLast}d ago` : '--'}</span>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <span className="block text-[10px] uppercase tracking-wider font-bold text-slate-400">Store</span>
-                          <span className="font-bold text-slate-800 text-lg capitalize truncate block pr-2">
-                            {habit.lastPurchasedStore}
-                          </span>
+                          {renderHabitStoreLogo(habit.lastPurchasedStore)}
                         </div>
                       </div>
 
-                      {/* NEW CATEGORY FOOTER */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3 border-t border-slate-100">
-                        <div className={`inline-flex items-center gap-1 text-[10px] font-label font-bold px-2.5 py-1 rounded-md border whitespace-nowrap ${getCategoryBgColor(habit.category)}`}>
+                      {/* INLINE CATEGORY PILL FOOTER */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
+                        <span className={`w-fit inline-flex items-center gap-1 text-[10px] font-label font-bold px-2.5 py-1 rounded-md border whitespace-nowrap ${getCategoryBgColor(habit.category)}`}>
                           <span className="material-symbols-outlined text-[14px] leading-none">
                             {getCategoryIcon(habit.category)}
                           </span>
                           <span>{habit.category || 'General'}</span>
-                        </div>
+                        </span>
                         
                         {habitTab === 'untracked' && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 self-start sm:self-auto">
+                          <span className="w-fit inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
                             Not tracked
                           </span>
