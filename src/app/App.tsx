@@ -620,7 +620,7 @@ export default function App() {
           }
         } else {
           status = 'Need Data';
-          progressPercent = 35;
+          progressPercent = 0; // Hidden for Need Data items
         }
       }
 
@@ -1336,14 +1336,12 @@ export default function App() {
                         )}
                       </div>
                       
-                      {habitTab === 'tracked' && (
+                      {habitTab === 'tracked' && habit.status !== 'Need Data' && (
                         <>
                           <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
                             <div 
                               className={`h-full transition-all ${
-                                habit.status === 'Restock Soon' ? 'bg-[#EF4444]' : 
-                                habit.status === 'Need Data' ? 'bg-amber-400' : 
-                                'bg-emerald-500'
+                                habit.status === 'Restock Soon' ? 'bg-[#EF4444]' : 'bg-emerald-500'
                               }`}
                               style={{ width: `${habit.progressPercent}%` }}
                             />
@@ -1358,6 +1356,19 @@ export default function App() {
                             </button>
                           </div>
                         </>
+                      )}
+
+                      {/* For Need Data items, keep the stop tracking button accessible without rendering a progress bar */}
+                      {habitTab === 'tracked' && habit.status === 'Need Data' && (
+                        <div className="flex justify-end mt-2 pt-2 border-t border-slate-100">
+                          <button 
+                            onClick={() => handleToggleTracking(habit.name, false)}
+                            className="text-slate-400 hover:text-slate-600 font-semibold text-xs flex items-center gap-1 transition-colors px-2 py-1 rounded"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">do_not_disturb_on</span>
+                            Stop tracking (move to untracked)
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
