@@ -620,7 +620,7 @@ export default function App() {
           }
         } else {
           status = 'Need Data';
-          progressPercent = 0; // Hidden for Need Data items
+          progressPercent = 0;
         }
       }
 
@@ -1336,6 +1336,7 @@ export default function App() {
                         )}
                       </div>
                       
+                      {/* Progress bar for Restock Soon / In Stock */}
                       {habitTab === 'tracked' && habit.status !== 'Need Data' && (
                         <>
                           <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
@@ -1346,7 +1347,8 @@ export default function App() {
                               style={{ width: `${habit.progressPercent}%` }}
                             />
                           </div>
-                          <div className="flex justify-end mt-2">
+                          <div className="flex justify-between items-center mt-2 pt-1">
+                            <span className="text-[11px] text-slate-400 font-medium"></span>
                             <button 
                               onClick={() => handleToggleTracking(habit.name, false)}
                               className="text-slate-400 hover:text-slate-600 font-semibold text-xs flex items-center gap-1 transition-colors px-2 py-1 rounded"
@@ -1358,12 +1360,16 @@ export default function App() {
                         </>
                       )}
 
-                      {/* For Need Data items, keep the stop tracking button accessible without rendering a progress bar */}
+                      {/* Information text & Stop tracking button for Need Data items */}
                       {habitTab === 'tracked' && habit.status === 'Need Data' && (
-                        <div className="flex justify-end mt-2 pt-2 border-t border-slate-100">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-100">
+                          <p className="text-[11px] text-amber-800 font-medium flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-[14px] text-amber-600 shrink-0">info</span>
+                            Complete one more purchase to get restock reminders
+                          </p>
                           <button 
                             onClick={() => handleToggleTracking(habit.name, false)}
-                            className="text-slate-400 hover:text-slate-600 font-semibold text-xs flex items-center gap-1 transition-colors px-2 py-1 rounded"
+                            className="text-slate-400 hover:text-slate-600 font-semibold text-xs flex items-center gap-1 transition-colors px-1 py-1 rounded shrink-0 self-end sm:self-auto"
                           >
                             <span className="material-symbols-outlined text-[14px]">do_not_disturb_on</span>
                             Stop tracking (move to untracked)
