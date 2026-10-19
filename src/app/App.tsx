@@ -424,7 +424,6 @@ export default function App() {
   const listTabItems = items;
   const cartTabItems = items.filter(item => item.inCart);
 
-  // Category order map used across List, Cart, and Habits tie-breakers
   const categoryOrderMap = useMemo(() => {
     return CATEGORIES.reduce((acc, cat, index) => {
       acc[cat.name] = index;
@@ -591,40 +590,40 @@ export default function App() {
 
     const dashboard = Object.values(itemHistory).map(record => {
       let daysSinceLast = null;
-      let status = 'Need Data';
+      let status: 'Restock Soon' | 'In Stock' | 'Need Data' = 'Need Data';
       let progressPercent = 0;
       let lastPurchasedStore = 'Unknown';
+      let effectiveInterval: number | null = null;
       
       const rawNameKey = record.itemData.name.toLowerCase();
       const itemNameKey = normalizeItemName(rawNameKey);
-      
-      let effectiveInterval = DEFAULT_VELOCITY[itemNameKey] || DEFAULT_VELOCITY[rawNameKey] || null;
-
-      if (record.history.length >= 2) {
-        const sortedHistory = [...record.history].sort((a, b) => a.date - b.date);
-        let totalIntervalMs = 0;
-        for (let i = 1; i < sortedHistory.length; i++) {
-          totalIntervalMs += (sortedHistory[i].date - sortedHistory[i - 1].date);
-        }
-        effectiveInterval = (totalIntervalMs / (sortedHistory.length - 1)) / MS_PER_DAY;
-      }
 
       if (record.history.length > 0) {
         const sortedHistory = [...record.history].sort((a, b) => a.date - b.date);
         const lastPurchase = sortedHistory[sortedHistory.length - 1];
         lastPurchasedStore = preferences[itemNameKey]?.lastPurchasedStore || lastPurchase.store;
         daysSinceLast = (now - lastPurchase.date) / MS_PER_DAY;
-        if (effectiveInterval) {
-          progressPercent = Math.min((daysSinceLast / effectiveInterval) * 100, 100);
+
+        if (record.history.length >= 2) {
+          let totalIntervalMs = 0;
+          for (let i = 1; i < sortedHistory.length; i++) {
+            totalIntervalMs += (sortedHistory[i].date - sortedHistory[i - 1].date);
+          }
+          const rawIntervalDays = (totalIntervalMs / (sortedHistory.length - 1)) / MS_PER_DAY;
+          effectiveInterval = Math.max(rawIntervalDays, 1);
+
+          progressPercent = Math.min(Math.max((daysSinceLast / effectiveInterval) * 100, 8), 100);
           if (daysSinceLast >= (effectiveInterval * 0.9)) {
             status = 'Restock Soon';
           } else {
-            status = 'Stocked';
+            status = 'In Stock';
           }
+        } else {
+          status = 'Need Data';
+          progressPercent = 35;
         }
       }
 
-      // Resolve category cleanly: if an item had legacy "Pantry & Snacks" or "General", re-evaluate or normalize to Pantry
       const savedOrItemCat = preferences[itemNameKey]?.category || record.itemData.category;
       const cleanCategory = (!savedOrItemCat || savedOrItemCat === 'Pantry & Snacks' || savedOrItemCat === 'General')
         ? autoTagItem(record.itemData.name).category
@@ -656,7 +655,6 @@ export default function App() {
       habit.name.toLowerCase().includes(habitSearchQuery.toLowerCase().trim())
     );
 
-    // Helper to compare two items by Category Order, then Alphabetically
     const compareByCategoryAndName = (a: any, b: any) => {
       const catA = normalizeCategoryName(a.category);
       const catB = normalizeCategoryName(b.category);
@@ -668,14 +666,20 @@ export default function App() {
     
     result.sort((a, b) => {
       if (habitSortFilter === 'urgency' && habitTab === 'tracked') {
-        if (a.status === 'Restock Soon' && b.status !== 'Restock Soon') return -1;
-        if (b.status === 'Restock Soon' && a.status !== 'Restock Soon') return 1;
+        const statusRank: Record<string, number> = {
+          'Restock Soon': 1,
+          'In Stock': 2,
+          'Need Data': 3
+        };
+        const rankA = statusRank[a.status] ?? 4;
+        const rankB = statusRank[b.status] ?? 4;
+        if (rankA !== rankB) return rankA - rankB;
+
         const diff = Math.round(b.progressPercent) - Math.round(a.progressPercent);
         return diff !== 0 ? diff : compareByCategoryAndName(a, b);
       } else if (habitSortFilter === 'recent') {
         const daysA = a.daysSinceLast !== null ? a.daysSinceLast : 9999;
         const daysB = b.daysSinceLast !== null ? b.daysSinceLast : 9999;
-        // Primary sort: Days since last bought. Secondary tie-breaker: Group same-category items together!
         if (daysA !== daysB) return daysA - daysB;
         return compareByCategoryAndName(a, b);
       } else if (habitSortFilter === 'frequent') {
@@ -773,8 +777,6 @@ export default function App() {
       const itemNameKey = normalizeItemName(rawNameKey);
       if (dismissedSuggestions.has(rawNameKey) || dismissedSuggestions.has(itemNameKey)) return;
 
-      let effectiveInterval = DEFAULT_VELOCITY[itemNameKey] || DEFAULT_VELOCITY[rawNameKey] || null;
-      
       if (record.dates.length >= 2) {
         const sortedDates = [...record.dates].sort((a, b) => a - b);
         let totalIntervalMs = 0;
@@ -782,11 +784,8 @@ export default function App() {
           totalIntervalMs += (sortedDates[i] - sortedDates[i - 1]);
         }
         const rawIntervalDays = (totalIntervalMs / (sortedDates.length - 1)) / MS_PER_DAY;
-        effectiveInterval = Math.max(rawIntervalDays, 3);
-      }
+        const effectiveInterval = Math.max(rawIntervalDays, 3);
 
-      if (record.dates.length > 0 && effectiveInterval) {
-        const sortedDates = [...record.dates].sort((a, b) => a - b);
         const lastPurchaseTime = sortedDates[sortedDates.length - 1];
         const daysSinceLast = (now - lastPurchaseTime) / MS_PER_DAY;
         if (daysSinceLast >= (effectiveInterval * 0.9) && daysSinceLast > 2) {
@@ -1180,7 +1179,7 @@ export default function App() {
                   <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-3">
                     <span className="material-symbols-outlined text-blue-700 text-[20px] mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
                     <p className="text-sm text-blue-800 leading-relaxed">
-                      <span className="font-bold">How it works:</span> Habits predicts when you run out based on past purchases. Only items you choose to track appear here!
+                      <span className="font-bold">How it works:</span> Habits predicts when you run out of an item based on its purchase frequency. Complete two or more grocery runs to get restock reminders.
                     </p>
                   </div>
                 ) : (
@@ -1231,6 +1230,33 @@ export default function App() {
                   const isAlreadyOnList = listTabItems.some(i => normalizeItemName(i.name) === normalizeItemName(habit.name));
                   const displayHabitCat = normalizeCategoryName(habit.category);
                   
+                  const getTrackedButtonConfig = () => {
+                    if (isAlreadyOnList) {
+                      return {
+                        label: 'Added to List',
+                        className: 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      };
+                    }
+                    if (habit.status === 'Restock Soon') {
+                      return {
+                        label: 'Restock Soon',
+                        className: 'bg-[#FFE4E6] text-[#BE123C] hover:bg-rose-100 shadow-sm'
+                      };
+                    }
+                    if (habit.status === 'Need Data') {
+                      return {
+                        label: 'Need Data',
+                        className: 'bg-[#FEF3C7] text-[#92400E] border border-amber-300/60 hover:bg-amber-100 shadow-sm'
+                      };
+                    }
+                    return {
+                      label: 'In Stock',
+                      className: 'bg-[#DCEDE0] text-[#1b3d2b] hover:bg-[#c2d6cb] shadow-sm'
+                    };
+                  };
+
+                  const trackedBtn = getTrackedButtonConfig();
+
                   return (
                     <div key={`${habit.id}-${index}`} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
                       
@@ -1243,15 +1269,10 @@ export default function App() {
                           <button 
                             onClick={() => handleAddFromHabits(habit, true)}
                             disabled={isAlreadyOnList}
-                            className={`flex items-center gap-1 text-xs font-bold px-3.5 py-1.5 rounded-full transition-all active:scale-95 shrink-0 ${
-                              isAlreadyOnList
-                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                : habit.status === 'Restock Soon' 
-                                  ? 'bg-[#FFE4E6] text-[#BE123C] hover:bg-rose-100 shadow-sm' 
-                                  : 'bg-[#DCEDE0] text-[#1b3d2b] hover:bg-[#c2d6cb] shadow-sm'
-                            }`}
+                            title={habit.status === 'Need Data' ? 'Complete one more purchase cycle to unlock restock predictions, or tap to add to list now' : undefined}
+                            className={`flex items-center gap-1 text-xs font-bold px-3.5 py-1.5 rounded-full transition-all active:scale-95 shrink-0 ${trackedBtn.className}`}
                           >
-                            {isAlreadyOnList ? 'Added to List' : 'Restock Soon'}
+                            {trackedBtn.label}
                             <span className="material-symbols-outlined text-[16px] font-bold">
                               {isAlreadyOnList ? 'check' : 'add'}
                             </span>
