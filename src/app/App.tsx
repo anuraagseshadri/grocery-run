@@ -94,7 +94,6 @@ export default function App() {
   const [habitSearchQuery, setHabitSearchQuery] = useState('');
   const [habitTab, setHabitTab] = useState<'tracked' | 'untracked'>('tracked');
 
-  // Persist user's chosen Habits sort option across sessions
   const [habitSortFilter, setHabitSortFilterState] = useState(() => {
     return localStorage.getItem('groceryRun_habitSortFilter') || 'urgency';
   });
@@ -557,10 +556,16 @@ export default function App() {
       if (!order.date || !order.items) return;
       const orderTime = new Date(order.date).getTime();
 
+      // Ensure distinct items per order to prevent inflation
+      const processedInThisOrder = new Set<string>();
+
       order.items.forEach((item: GroceryItem) => {
         const rawNameKey = (item.name || '').toLowerCase();
         const normalizedKey = normalizeItemName(rawNameKey); 
         
+        if (processedInThisOrder.has(normalizedKey)) return;
+        processedInThisOrder.add(normalizedKey);
+
         let currentTrackState = item.trackHabit !== false;
         if (trackingOverrides[normalizedKey] !== undefined) {
           currentTrackState = trackingOverrides[normalizedKey];
@@ -592,6 +597,7 @@ export default function App() {
       let daysSinceLast = null;
       let status: 'Restock Soon' | 'In Stock' | 'Need Data' = 'Need Data';
       let progressPercent = 0;
+      let rawUrgencyRatio = 0;
       let lastPurchasedStore = 'Unknown';
       let effectiveInterval: number | null = null;
       
@@ -612,7 +618,9 @@ export default function App() {
           const rawIntervalDays = (totalIntervalMs / (sortedHistory.length - 1)) / MS_PER_DAY;
           effectiveInterval = Math.max(rawIntervalDays, 1);
 
-          progressPercent = Math.min(Math.max((daysSinceLast / effectiveInterval) * 100, 8), 100);
+          rawUrgencyRatio = daysSinceLast / effectiveInterval;
+          progressPercent = Math.min(Math.max(rawUrgencyRatio * 100, 8), 100);
+
           if (daysSinceLast >= (effectiveInterval * 0.9)) {
             status = 'Restock Soon';
           } else {
@@ -639,16 +647,19 @@ export default function App() {
         daysSinceLast: daysSinceLast !== null ? Math.round(daysSinceLast) : null,
         lastPurchasedStore,
         status,
-        progressPercent
+        progressPercent,
+        rawUrgencyRatio
       };
     });
 
     return dashboard;
   }, [purchaseHistory, trackingOverrides, preferences]);
 
-  const activeHabitsList = habitTab === 'tracked' 
-    ? habitsDashboardData.filter(i => i.trackHabit !== false) 
-    : habitsDashboardData.filter(i => i.trackHabit === false);
+  const activeHabitsList = useMemo(() => {
+    return habitTab === 'tracked' 
+      ? habitsDashboardData.filter(i => i.trackHabit !== false) 
+      : habitsDashboardData.filter(i => i.trackHabit === false);
+  }, [habitsDashboardData, habitTab]);
 
   const filteredAndSortedHabits = useMemo(() => {
     let result = activeHabitsList.filter(habit => 
@@ -674,6 +685,17 @@ export default function App() {
         const rankA = statusRank[a.status] ?? 4;
         const rankB = statusRank[b.status] ?? 4;
         if (rankA !== rankB) return rankA - rankB;
+
+        // High frequency staple prioritization for Restock Soon items
+        if (a.status === 'Restock Soon' && b.status === 'Restock Soon') {
+          if (b.totalPurchases !== a.totalPurchases) {
+            return b.totalPurchases - a.totalPurchases; 
+          }
+          // Uncapped urgency ratio tie-breaker for items with the same purchase count
+          if (b.rawUrgencyRatio !== a.rawUrgencyRatio) {
+            return b.rawUrgencyRatio - a.rawUrgencyRatio;
+          }
+        }
 
         const diff = Math.round(b.progressPercent) - Math.round(a.progressPercent);
         return diff !== 0 ? diff : compareByCategoryAndName(a, b);
@@ -742,27 +764,27 @@ export default function App() {
       const orderTime = new Date(order.date).getTime(); 
       order.items.forEach((item: GroceryItem) => {
         const rawNameKey = (item.name || '').toLowerCase();
-        const normalizedKey = normalizeItemName(rawNameKey); 
+        const itemNameKey = normalizeItemName(rawNameKey); 
         
         let currentTrackState = item.trackHabit !== false;
-        if (trackingOverrides[normalizedKey] !== undefined) {
-          currentTrackState = trackingOverrides[normalizedKey];
-        } else if (preferences[normalizedKey] && preferences[normalizedKey].trackHabit !== undefined) {
-          currentTrackState = preferences[normalizedKey].trackHabit;
+        if (trackingOverrides[itemNameKey] !== undefined) {
+          currentTrackState = trackingOverrides[itemNameKey];
+        } else if (preferences[itemNameKey] && preferences[itemNameKey].trackHabit !== undefined) {
+          currentTrackState = preferences[itemNameKey].trackHabit;
         } else if (item.trackHabit !== undefined) {
           currentTrackState = item.trackHabit;
         }
 
-        if (!itemHistory[normalizedKey]) {
-          itemHistory[normalizedKey] = { itemData: item, latestOrderTime: orderTime, dates: [], isTracked: currentTrackState };
+        if (!itemHistory[itemNameKey]) {
+          itemHistory[itemNameKey] = { itemData: item, latestOrderTime: orderTime, dates: [], isTracked: currentTrackState };
         } else {
-          itemHistory[normalizedKey].isTracked = currentTrackState;
-          if (orderTime >= itemHistory[normalizedKey].latestOrderTime) {
-            itemHistory[normalizedKey].itemData = item;
-            itemHistory[normalizedKey].latestOrderTime = orderTime;
+          itemHistory[itemNameKey].isTracked = currentTrackState;
+          if (orderTime >= itemHistory[itemNameKey].latestOrderTime) {
+            itemHistory[itemNameKey].itemData = item;
+            itemHistory[itemNameKey].latestOrderTime = orderTime;
           }
         }
-        itemHistory[normalizedKey].dates.push(orderTime);
+        itemHistory[itemNameKey].dates.push(orderTime);
       });
     });
 
@@ -1226,9 +1248,10 @@ export default function App() {
               </div>
 
               <div className="flex flex-col gap-3">
-                {filteredAndSortedHabits.map((habit, index) => {
+                {filteredAndSortedHabits.map((habit) => {
                   const isAlreadyOnList = listTabItems.some(i => normalizeItemName(i.name) === normalizeItemName(habit.name));
                   const displayHabitCat = normalizeCategoryName(habit.category);
+                  const isFrequentlyPurchased = habitTab === 'tracked' && habit.totalPurchases >= 5;
                   
                   const getTrackedButtonConfig = () => {
                     if (isAlreadyOnList) {
@@ -1258,7 +1281,7 @@ export default function App() {
                   const trackedBtn = getTrackedButtonConfig();
 
                   return (
-                    <div key={`${habit.id}-${index}`} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    <div key={habit.id} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
                       
                       <div className="flex justify-between items-center mb-1">
                         <h3 className="font-bold text-slate-800 capitalize flex items-center gap-2 flex-1 min-w-0 pr-3">
@@ -1323,10 +1346,19 @@ export default function App() {
                       </div>
 
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
-                        <span className={`w-fit inline-flex items-center gap-1 text-[10px] font-label font-bold px-2.5 py-1 rounded-md border whitespace-nowrap ${getCategoryBgColor(displayHabitCat)}`}>
-                          <Icon icon={getCategoryIcon(displayHabitCat)} className="text-[14px] shrink-0" />
-                          <span>{displayHabitCat}</span>
-                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`w-fit inline-flex items-center gap-1 text-[10px] font-label font-bold px-2.5 py-1 rounded-md border whitespace-nowrap ${getCategoryBgColor(displayHabitCat)}`}>
+                            <Icon icon={getCategoryIcon(displayHabitCat)} className="text-[14px] shrink-0" />
+                            <span>{displayHabitCat}</span>
+                          </span>
+
+                          {isFrequentlyPurchased && (
+                            <span className="w-fit inline-flex items-center gap-1 text-[10px] font-label font-bold px-2.5 py-1 rounded-md bg-amber-100 text-amber-900 border border-amber-200 shadow-sm whitespace-nowrap">
+                              <span className="material-symbols-outlined text-[13px] text-amber-600">bolt</span>
+                              <span>Frequently Purchased</span>
+                            </span>
+                          )}
+                        </div>
                         
                         {habitTab === 'untracked' && (
                           <span className="w-fit inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
@@ -1336,7 +1368,6 @@ export default function App() {
                         )}
                       </div>
                       
-                      {/* Progress bar for Restock Soon / In Stock */}
                       {habitTab === 'tracked' && habit.status !== 'Need Data' && (
                         <>
                           <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
@@ -1360,7 +1391,6 @@ export default function App() {
                         </>
                       )}
 
-                      {/* Information text & Stop tracking button for Need Data items */}
                       {habitTab === 'tracked' && habit.status === 'Need Data' && (
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-100">
                           <p className="text-[11px] text-amber-800 font-medium flex items-center gap-1.5">
