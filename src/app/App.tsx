@@ -7,7 +7,7 @@ import { ItemCard } from '../components/ItemCard';
 import { EditModal } from '../components/EditModal';
 import { Toast } from '../components/Toast';
 import { autoTagItem } from '../tagger';
-import { STORE_OPTIONS, getItemIcon, CATEGORIES, getCategoryBgColor, getCategoryIcon } from '../constants';
+import { STORE_OPTIONS, getItemIcon, CATEGORIES, getCategoryBgColor, getCategoryIcon, normalizeCategoryName } from '../constants';
 import { Icon } from '@iconify/react';
 import { db, auth, analytics } from '../firebase';
 import { Analytics } from '@vercel/analytics/react';
@@ -93,7 +93,17 @@ export default function App() {
 
   const [habitSearchQuery, setHabitSearchQuery] = useState('');
   const [habitTab, setHabitTab] = useState<'tracked' | 'untracked'>('tracked');
-  const [habitSortFilter, setHabitSortFilter] = useState('urgency');
+
+  // Persist user's chosen Habits sort option across sessions
+  const [habitSortFilter, setHabitSortFilterState] = useState(() => {
+    return localStorage.getItem('groceryRun_habitSortFilter') || 'urgency';
+  });
+
+  const setHabitSortFilter = (value: string) => {
+    setHabitSortFilterState(value);
+    localStorage.setItem('groceryRun_habitSortFilter', value);
+  };
+
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
   
   const [trackingOverrides, setTrackingOverrides] = useState<Record<string, boolean>>({});
@@ -229,10 +239,11 @@ export default function App() {
     }
     
     const { category: autoCat, store: autoStore } = autoTagItem(newItemName);
+    const finalCat = learnedCat ? normalizeCategoryName(learnedCat) : autoCat;
     
     addDoc(collection(db, 'items'), {
       name: newItemName.trim(),
-      category: learnedCat || autoCat, 
+      category: finalCat, 
       store: (learnedStore && learnedStore !== 'Unknown') ? learnedStore : autoStore, 
       inCart: false, 
       trackHabit: learnedTrackHabit,
@@ -243,7 +254,7 @@ export default function App() {
     if (analytics) {
       logEvent(analytics, 'item_added', {
         add_method: 'manual_type',
-        item_category: learnedCat || autoCat
+        item_category: finalCat
       });
     }
   };
@@ -278,7 +289,7 @@ export default function App() {
         userId: user.uid,
         updatedAt: new Date().toISOString() 
       };
-      if (updates.category) prefPayload.category = updates.category;
+      if (updates.category) prefPayload.category = normalizeCategoryName(updates.category);
       if (updates.store) prefPayload.lastPurchasedStore = updates.store;
       if (updates.trackHabit !== undefined) prefPayload.trackHabit = updates.trackHabit;
       setDoc(doc(db, 'preferences', getPrefDocId(user.uid, nameKey)), prefPayload, { merge: true });
@@ -338,7 +349,7 @@ export default function App() {
       const nameKey = normalizeItemName(item.name);
       const prefPayload: any = {
         userId: user.uid,
-        category: item.category,
+        category: normalizeCategoryName(item.category),
         lastPurchasedDate: checkoutTime,
         lastPurchasedStore: item.store || 'Other',
         updatedAt: checkoutTime
@@ -351,7 +362,6 @@ export default function App() {
     }
   };
 
-  // NEW: Completely wipe all purchase history to reset the Habits engine
   const handlePurgeHabits = async () => {
     if (!user) return;
     if (!window.confirm("Are you sure you want to completely purge your Habit recommendations? This deletes your entire purchase history and cannot be undone.")) return;
@@ -387,10 +397,11 @@ export default function App() {
       habit.store ||
       'Other';
 
-    const resolvedCategory = 
+    const rawCategory = 
       preferences[nameKey]?.category ||
       habit.category ||
       autoTagItem(habit.name).category;
+    const resolvedCategory = normalizeCategoryName(rawCategory);
 
     addDoc(collection(db, 'items'), {
       name: habit.name, 
@@ -413,7 +424,14 @@ export default function App() {
   const listTabItems = items;
   const cartTabItems = items.filter(item => item.inCart);
 
-  // Derive autofill suggestions for AddItemForm based on past purchases and current items
+  // Category order map used across List, Cart, and Habits tie-breakers
+  const categoryOrderMap = useMemo(() => {
+    return CATEGORIES.reduce((acc, cat, index) => {
+      acc[cat.name] = index;
+      return acc;
+    }, {} as Record<string, number>);
+  }, []);
+
   const allKnownItems = useMemo(() => {
     const set = new Set<string>();
     Object.keys(DEFAULT_VELOCITY).forEach(i => set.add(i));
@@ -492,7 +510,7 @@ export default function App() {
   const cartCategoryBreakdown = useMemo(() => {
     const counts: Record<string, number> = {};
     cartTabItems.forEach(item => {
-      const cat = item.category?.trim() || 'General';
+      const cat = normalizeCategoryName(item.category);
       counts[cat] = (counts[cat] || 0) + 1;
     });
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
@@ -606,8 +624,15 @@ export default function App() {
         }
       }
 
+      // Resolve category cleanly: if an item had legacy "Pantry & Snacks" or "General", re-evaluate or normalize to Pantry
+      const savedOrItemCat = preferences[itemNameKey]?.category || record.itemData.category;
+      const cleanCategory = (!savedOrItemCat || savedOrItemCat === 'Pantry & Snacks' || savedOrItemCat === 'General')
+        ? autoTagItem(record.itemData.name).category
+        : normalizeCategoryName(savedOrItemCat);
+
       return {
         ...record.itemData,
+        category: cleanCategory,
         store: lastPurchasedStore !== 'Unknown' ? lastPurchasedStore : record.itemData.store,
         trackHabit: record.isTracked,
         totalPurchases: record.count,
@@ -630,30 +655,45 @@ export default function App() {
     let result = activeHabitsList.filter(habit => 
       habit.name.toLowerCase().includes(habitSearchQuery.toLowerCase().trim())
     );
+
+    // Helper to compare two items by Category Order, then Alphabetically
+    const compareByCategoryAndName = (a: any, b: any) => {
+      const catA = normalizeCategoryName(a.category);
+      const catB = normalizeCategoryName(b.category);
+      const orderA = categoryOrderMap[catA] ?? 99;
+      const orderB = categoryOrderMap[catB] ?? 99;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.name.localeCompare(b.name);
+    };
     
     result.sort((a, b) => {
       if (habitSortFilter === 'urgency' && habitTab === 'tracked') {
         if (a.status === 'Restock Soon' && b.status !== 'Restock Soon') return -1;
         if (b.status === 'Restock Soon' && a.status !== 'Restock Soon') return 1;
-        return b.progressPercent - a.progressPercent;
+        const diff = Math.round(b.progressPercent) - Math.round(a.progressPercent);
+        return diff !== 0 ? diff : compareByCategoryAndName(a, b);
       } else if (habitSortFilter === 'recent') {
-        return (a.daysSinceLast !== null ? a.daysSinceLast : 9999) - (b.daysSinceLast !== null ? b.daysSinceLast : 9999);
+        const daysA = a.daysSinceLast !== null ? a.daysSinceLast : 9999;
+        const daysB = b.daysSinceLast !== null ? b.daysSinceLast : 9999;
+        // Primary sort: Days since last bought. Secondary tie-breaker: Group same-category items together!
+        if (daysA !== daysB) return daysA - daysB;
+        return compareByCategoryAndName(a, b);
       } else if (habitSortFilter === 'frequent') {
-        return b.totalPurchases - a.totalPurchases;
+        if (b.totalPurchases !== a.totalPurchases) return b.totalPurchases - a.totalPurchases;
+        return compareByCategoryAndName(a, b);
       } else if (habitSortFilter === 'az') {
         return a.name.localeCompare(b.name);
       } else if (habitSortFilter === 'category') {
-        const catCompare = (a.category || 'General').localeCompare(b.category || 'General');
-        return catCompare !== 0 ? catCompare : a.name.localeCompare(b.name);
+        return compareByCategoryAndName(a, b);
       } else if (habitSortFilter === 'store') {
         const storeCompare = (a.lastPurchasedStore || 'Other').localeCompare(b.lastPurchasedStore || 'Other');
-        return storeCompare !== 0 ? storeCompare : a.name.localeCompare(b.name);
+        return storeCompare !== 0 ? storeCompare : compareByCategoryAndName(a, b);
       }
       return 0;
     });
     
     return result;
-  }, [activeHabitsList, habitSearchQuery, habitSortFilter, habitTab]);
+  }, [activeHabitsList, habitSearchQuery, habitSortFilter, habitTab, categoryOrderMap]);
 
   const handleHabitTabSwitch = (tab: 'tracked' | 'untracked') => {
     setHabitTab(tab);
@@ -827,7 +867,6 @@ export default function App() {
         {activeTab === 'list' && (
           <>
             <div className="flex flex-col gap-4">
-              {/* AddItemForm now receives suggestions to power the autofill dropdown */}
               <AddItemForm onAddItem={handleAddItem} suggestions={allKnownItems} />
               <AddForm onAddItem={handleAddItem} />
             </div>
@@ -899,14 +938,9 @@ export default function App() {
                     </div>
                   );
                   
-                  const categoryOrder = CATEGORIES.reduce((acc, cat, index) => {
-                    acc[cat.name] = index;
-                    return acc;
-                  }, {} as Record<string, number>);
-                  
                   const sortedItems = [...itemsInStore].sort((a, b) => {
-                    const orderA = categoryOrder[a.category || ''] ?? 99;
-                    const orderB = categoryOrder[b.category || ''] ?? 99;
+                    const orderA = categoryOrderMap[normalizeCategoryName(a.category)] ?? 99;
+                    const orderB = categoryOrderMap[normalizeCategoryName(b.category)] ?? 99;
                     return orderA - orderB;
                   });
 
@@ -919,7 +953,7 @@ export default function App() {
                             key={item.id} 
                             id={item.id} 
                             name={item.name} 
-                            category={item.category || 'Unknown'} 
+                            category={normalizeCategoryName(item.category)} 
                             inCart={item.inCart} 
                             viewMode="list" 
                             trackHabit={item.trackHabit}
@@ -1012,8 +1046,8 @@ export default function App() {
                           key={catName} 
                           className={`inline-flex items-center gap-1 text-[10px] font-label font-bold px-2 py-0.5 rounded-md border ${getCategoryBgColor(catName)}`}
                         >
-                         <Icon icon={getCategoryIcon(catName)} className="text-[13px] shrink-0" />
-                            <span>{catName}: {count}</span>
+                          <Icon icon={getCategoryIcon(catName)} className="text-[13px] shrink-0" />
+                          <span>{catName}: {count}</span>
                         </span>
                       ))}
                     </div>
@@ -1028,14 +1062,9 @@ export default function App() {
                     );
                     const isExpanded = expandedCartStore === storeName;
 
-                    const categoryOrder = CATEGORIES.reduce((acc, cat, index) => {
-                      acc[cat.name] = index;
-                      return acc;
-                    }, {} as Record<string, number>);
-
                     const sortedStoreItems = [...itemsInStore].sort((a, b) => {
-                      const orderA = categoryOrder[a.category || ''] ?? 99;
-                      const orderB = categoryOrder[b.category || ''] ?? 99;
+                      const orderA = categoryOrderMap[normalizeCategoryName(a.category)] ?? 99;
+                      const orderB = categoryOrderMap[normalizeCategoryName(b.category)] ?? 99;
                       return orderA - orderB;
                     });
 
@@ -1085,7 +1114,7 @@ export default function App() {
                                 key={item.id} 
                                 id={item.id} 
                                 name={item.name} 
-                                category={item.category || 'General'} 
+                                category={normalizeCategoryName(item.category)} 
                                 inCart={item.inCart} 
                                 viewMode="cart" 
                                 trackHabit={item.trackHabit}
@@ -1200,13 +1229,14 @@ export default function App() {
               <div className="flex flex-col gap-3">
                 {filteredAndSortedHabits.map((habit, index) => {
                   const isAlreadyOnList = listTabItems.some(i => normalizeItemName(i.name) === normalizeItemName(habit.name));
+                  const displayHabitCat = normalizeCategoryName(habit.category);
                   
                   return (
                     <div key={`${habit.id}-${index}`} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
                       
                       <div className="flex justify-between items-center mb-1">
                         <h3 className="font-bold text-slate-800 capitalize flex items-center gap-2 flex-1 min-w-0 pr-3">
-                          <Icon icon={getItemIcon(habit.name, habit.category)} className="text-xl shrink-0" />
+                          <Icon icon={getItemIcon(habit.name, displayHabitCat)} className="text-xl shrink-0" />
                           <span className="break-words leading-tight">{habit.name}</span>
                         </h3>
                         {habitTab === 'tracked' ? (
@@ -1272,9 +1302,9 @@ export default function App() {
                       </div>
 
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
-                        <span className={`w-fit inline-flex items-center gap-1 text-[10px] font-label font-bold px-2.5 py-1 rounded-md border whitespace-nowrap ${getCategoryBgColor(habit.category)}`}>
-                          <Icon icon={getCategoryIcon(habit.category)} className="text-[14px] shrink-0" />
-                          <span>{habit.category || 'General'}</span>
+                        <span className={`w-fit inline-flex items-center gap-1 text-[10px] font-label font-bold px-2.5 py-1 rounded-md border whitespace-nowrap ${getCategoryBgColor(displayHabitCat)}`}>
+                          <Icon icon={getCategoryIcon(displayHabitCat)} className="text-[14px] shrink-0" />
+                          <span>{displayHabitCat}</span>
                         </span>
                         
                         {habitTab === 'untracked' && (
@@ -1327,7 +1357,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* DANGER ZONE: Purge Habit Data */}
               {purchaseHistory.length > 0 && (
                 <div className="mt-6 pt-6 border-t border-slate-200 flex flex-col items-center">
                   <p className="text-xs text-slate-400 mb-3 text-center px-4 max-w-xs">

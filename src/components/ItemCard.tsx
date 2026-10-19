@@ -1,6 +1,6 @@
 import React from 'react';
 import { Icon } from '@iconify/react';
-import { getItemIcon, getCategoryBgColor, getCategoryIcon } from '../constants';
+import { getItemIcon, getCategoryBgColor, getCategoryIcon, normalizeCategoryName } from '../constants';
 import { LuCheck, LuTrash2, LuUndo } from 'react-icons/lu';
 
 interface ItemCardProps {
@@ -28,6 +28,7 @@ export function ItemCard({
 }: ItemCardProps) {
   
   const isListMode = viewMode === 'list';
+  const displayCategory = normalizeCategoryName(category);
 
   return (
     <div className={`relative w-full p-4 rounded-xl border transition-all duration-300 flex flex-col gap-1 ${
@@ -55,7 +56,7 @@ export function ItemCard({
           <div className={`text-2xl shrink-0 transition-all ${
             isListMode && inCart ? 'grayscale opacity-50' : 'text-primary'
           }`}>
-            <Icon icon={getItemIcon(name, category)} />
+            <Icon icon={getItemIcon(name, displayCategory)} />
           </div>
           
           {/* VERTICAL STACK: Item Name & Tracking Badge */}
@@ -101,9 +102,9 @@ export function ItemCard({
         <div className="flex items-center gap-2 shrink-0">
           <div className={`flex items-center gap-1 text-[10px] font-label font-semibold px-2 py-1 rounded-md border shrink-0 transition-all ${
              isListMode && inCart ? 'opacity-50 grayscale' : ''
-          } ${getCategoryBgColor(category)}`}>
-            <Icon icon={getCategoryIcon(category)} className="text-[14px] shrink-0" />
-            <span className="whitespace-nowrap">{category || 'General'}</span>
+          } ${getCategoryBgColor(displayCategory)}`}>
+            <Icon icon={getCategoryIcon(displayCategory)} className="text-[14px] shrink-0" />
+            <span className="whitespace-nowrap">{displayCategory}</span>
           </div>
 
           {isListMode ? (

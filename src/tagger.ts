@@ -93,7 +93,7 @@ export function autoTagItem(itemName: string) {
     return { category: CATEGORY_NAMES.PASTA_AND_NOODLES, store: 'Other' };
   }
 
-  // 8. Cooking Essentials (Includes Spices, Salt, Sugar, Oils, Lentils/Dal)
+  // 8. Cooking Essentials (Includes Spices, Salt, Sugar, Oils, Honey)
   if (
     lower.includes('sugar') || 
     hasWord(lower, 'salt') || 
@@ -109,8 +109,6 @@ export function autoTagItem(itemName: string) {
     lower.includes('chili powder') || 
     lower.includes('baking soda') || 
     lower.includes('baking powder') || 
-    lower.includes('lentil') || 
-    hasWord(lower, 'dal') || 
     lower.includes('oil') || 
     lower.includes('ghee') || 
     lower.includes('vinegar') || 
@@ -146,6 +144,6 @@ export function autoTagItem(itemName: string) {
     return { category: CATEGORY_NAMES.FROZEN, store: 'Other' };
   }
 
-  // Fallback for unrecognized items
-  return { category: CATEGORY_NAMES.GENERAL, store: 'Other' };
+  // Fallback for shelf-stable/kitchen staples (Dal, Lentils, Soya granules, Dosa batter, Paapad, etc.)
+  return { category: CATEGORY_NAMES.PANTRY, store: 'Other' };
 }

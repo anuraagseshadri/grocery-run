@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GroceryItem } from '../app/types';
-import { STORE_OPTIONS, CATEGORIES } from '../constants';
+import { STORE_OPTIONS, CATEGORIES, normalizeCategoryName } from '../constants';
 import { Icon } from '@iconify/react';
 
 interface EditModalProps {
@@ -28,10 +28,10 @@ const getCategoryModalIcon = (categoryName: string) => {
     'Household & Cleaning': 'fluent-emoji-flat:roll-of-paper', 
     'Pharmacy & Personal Care': 'fluent-emoji-flat:soap', 
     'Baby': 'fluent-emoji-flat:baby-bottle',
-    'General': 'fluent-emoji-flat:shopping-bags'
+    'Pantry': 'mdi:cupboard-outline'
   };
   
-  return iconMap[categoryName] || 'fluent-emoji-flat:shopping-bags';
+  return iconMap[categoryName] || 'mdi:cupboard-outline';
 };
 
 const getStoreBrand = (storeName: string) => {
@@ -56,7 +56,7 @@ const getStoreBrand = (storeName: string) => {
 export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onForget }) => {
   const [name, setName] = useState(item.name);
   
-  const initialCategory = item.category === 'Beverages' ? 'Drinks & Beverages' : (item.category || CATEGORIES[0].name);
+  const initialCategory = normalizeCategoryName(item.category);
   const [category, setCategory] = useState(initialCategory);
   const [store, setStore] = useState(item.store || STORE_OPTIONS[0].name);
   const [trackHabit, setTrackHabit] = useState<boolean>(item.trackHabit !== false);

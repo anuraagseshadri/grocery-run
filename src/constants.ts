@@ -73,7 +73,7 @@ export const CATEGORY_NAMES = {
   HOUSEHOLD_AND_CLEANING: 'Household & Cleaning',
   PHARMACY_AND_PERSONAL_CARE: 'Pharmacy & Personal Care',
   BABY: 'Baby',
-  GENERAL: 'General'
+  PANTRY: 'Pantry'
 } as const;
 
 export const CATEGORIES = [
@@ -92,35 +92,46 @@ export const CATEGORIES = [
   { name: CATEGORY_NAMES.HOUSEHOLD_AND_CLEANING, icon: 'mdi:broom' },
   { name: CATEGORY_NAMES.PHARMACY_AND_PERSONAL_CARE, icon: 'mdi:pill' },
   { name: CATEGORY_NAMES.BABY, icon: 'mdi:baby-carriage' },
-  { name: CATEGORY_NAMES.GENERAL, icon: 'mdi:shopping-outline' }
+  { name: CATEGORY_NAMES.PANTRY, icon: 'mdi:cupboard-outline' }
 ];
 
+// Automatically normalizes legacy category strings ("General", "Pantry & Snacks", "Beverages", etc.)
+export const normalizeCategoryName = (category?: string): string => {
+  const raw = category?.trim();
+  if (!raw || raw === 'General' || raw === 'Unknown' || raw === 'Pantry & Snacks') {
+    return CATEGORY_NAMES.PANTRY;
+  }
+  if (raw === 'Beverages') return CATEGORY_NAMES.DRINKS_AND_BEVERAGES;
+  if (raw === 'Nuts & Spices') return CATEGORY_NAMES.NUTS_AND_SEEDS;
+  return raw;
+};
+
+// Uses Iconify vector icons so every category (including Pantry's kitchen shelf) renders a crisp icon
 export const getCategoryIcon = (category?: string): string => {
-  switch (category?.trim()) {
-    case 'Produce': return 'mdi:leaf';
-    case 'Dairy & Eggs': return 'mdi:water-outline';
-    case 'Meat & Seafood': return 'mdi:food-drumstick-outline';
-    case 'Bakery': return 'mdi:croissant';
-    case 'Frozen': return 'mdi:snowflake';
-    case 'Drinks & Beverages': return 'mdi:cup-water';
-    case 'Household & Cleaning': return 'mdi:broom';
-    case 'Pharmacy & Personal Care': return 'mdi:medical-bag';
-    case 'Dessert & Snacks': return 'mdi:cookie-outline';
-    case 'Rice & Wheat': return 'mdi:barley'; 
-    case 'Pasta & Noodles': return 'mdi:noodles'; 
-    case 'Breakfast & Cereal': return 'mdi:bowl-mix-outline'; 
-    case 'Cooking Essentials': return 'mdi:shaker-outline'; 
-    case 'Nuts & Seeds': return 'mdi:peanut-outline';
-    case 'Baby': return 'mdi:baby-face-outline'; 
-    case 'General': return 'mdi:shopping-outline';
-    default: return 'mdi:shopping-outline';
+  const cleanCat = normalizeCategoryName(category);
+  switch (cleanCat) {
+    case CATEGORY_NAMES.PRODUCE: return 'mdi:leaf';
+    case CATEGORY_NAMES.DAIRY_AND_EGGS: return 'mdi:water-outline';
+    case CATEGORY_NAMES.MEAT_AND_SEAFOOD: return 'mdi:food-drumstick-outline';
+    case CATEGORY_NAMES.BAKERY: return 'mdi:croissant';
+    case CATEGORY_NAMES.FROZEN: return 'mdi:snowflake';
+    case CATEGORY_NAMES.DRINKS_AND_BEVERAGES: return 'mdi:cup-water';
+    case CATEGORY_NAMES.HOUSEHOLD_AND_CLEANING: return 'mdi:broom';
+    case CATEGORY_NAMES.PHARMACY_AND_PERSONAL_CARE: return 'mdi:medical-bag';
+    case CATEGORY_NAMES.DESSERT_AND_SNACKS: return 'mdi:cookie-outline';
+    case CATEGORY_NAMES.RICE_AND_WHEAT: return 'mdi:barley'; 
+    case CATEGORY_NAMES.PASTA_AND_NOODLES: return 'mdi:noodles'; 
+    case CATEGORY_NAMES.BREAKFAST_AND_CEREAL: return 'mdi:bowl-mix-outline'; 
+    case CATEGORY_NAMES.COOKING_ESSENTIALS: return 'mdi:shaker-outline'; 
+    case CATEGORY_NAMES.NUTS_AND_SEEDS: return 'mdi:peanut-outline';
+    case CATEGORY_NAMES.BABY: return 'mdi:baby-face-outline'; 
+    case CATEGORY_NAMES.PANTRY: return 'mdi:cupboard-outline';
+    default: return 'mdi:cupboard-outline';
   }
 };
 
 export const getCategoryBgColor = (category?: string) => {
-  if (!category) return 'bg-gray-100 border-gray-200 text-gray-600';
-  
-  const cat = category.trim();
+  const cat = normalizeCategoryName(category);
   
   switch (cat) {
     case CATEGORY_NAMES.PRODUCE: return 'bg-emerald-100 border-emerald-200 text-emerald-800';
@@ -138,20 +149,19 @@ export const getCategoryBgColor = (category?: string) => {
     case CATEGORY_NAMES.HOUSEHOLD_AND_CLEANING: return 'bg-slate-200 border-slate-300 text-slate-700';
     case CATEGORY_NAMES.PHARMACY_AND_PERSONAL_CARE: return 'bg-purple-100 border-purple-200 text-purple-800'; 
     case CATEGORY_NAMES.FROZEN: return 'bg-blue-100 border-blue-200 text-blue-800'; 
-    case CATEGORY_NAMES.GENERAL: return 'bg-stone-100 border-stone-300 text-stone-700';
-    default: return 'bg-gray-50 border-gray-200 text-gray-500';
+    case CATEGORY_NAMES.PANTRY: return 'bg-stone-100 border-stone-300 text-stone-700';
+    default: return 'bg-stone-100 border-stone-300 text-stone-700';
   }
 };
 
 // Helper to match whole words (prevents "nut" from matching inside "coconut", "donut", or "butternut")
 const hasWord = (text: string, word: string) => new RegExp(`\\b${word}s?\\b`, 'i').test(text);
 
-export const getItemIcon = (name: string, category?: string): string => {
+export const getItemIcon = (name: string, _category?: string): string => {
   const n = name.toLowerCase().trim();
 
   // ==========================================
   // 1. COMPOUND & SPECIFIC OVERRIDES (HIGHEST PRIORITY)
-  // Checked first so words like "coconut", "eggplant", "pineapple", or "cheerios" never collide with shorter words
   // ==========================================
   if (n.includes('coconut')) return 'fluent-emoji-flat:coconut';
   if (n.includes('pineapple')) return 'fluent-emoji-flat:pineapple';
@@ -299,28 +309,9 @@ export const getItemIcon = (name: string, category?: string): string => {
   if (n.includes('breakfast')) return 'fluent-emoji-flat:shallow-pan-of-food';
 
   // ==========================================
-  // 10. CATEGORY FALLBACKS
+  // 10. MASON JAR DEFAULT FALLBACK
+  // Whenever an item (like Soya granules, Dosa batter, Paapad) doesn't have a specific icon,
+  // it uses the Mason Jar instead of the category icon!
   // ==========================================
-  if (category) {
-    switch (category) {
-      case CATEGORY_NAMES.PRODUCE: return 'mdi:leaf';
-      case CATEGORY_NAMES.BAKERY: return 'mdi:bread-slice';
-      case CATEGORY_NAMES.MEAT_AND_SEAFOOD: return 'mdi:food-drumstick';
-      case CATEGORY_NAMES.DAIRY_AND_EGGS: return 'mdi:egg-outline';
-      case CATEGORY_NAMES.RICE_AND_WHEAT: return 'mdi:barley';
-      case CATEGORY_NAMES.PASTA_AND_NOODLES: return 'mdi:noodles';
-      case CATEGORY_NAMES.BREAKFAST_AND_CEREAL: return 'mdi:bowl';
-      case CATEGORY_NAMES.COOKING_ESSENTIALS: return 'mdi:shaker';
-      case CATEGORY_NAMES.NUTS_AND_SEEDS: return 'fluent-emoji-flat:peanuts';
-      case CATEGORY_NAMES.DESSERT_AND_SNACKS: return 'mdi:cookie';
-      case CATEGORY_NAMES.DRINKS_AND_BEVERAGES: return 'mdi:cup-water';
-      case CATEGORY_NAMES.FROZEN: return 'mdi:snowflake';
-      case CATEGORY_NAMES.HOUSEHOLD_AND_CLEANING: return 'mdi:broom';
-      case CATEGORY_NAMES.PHARMACY_AND_PERSONAL_CARE: return 'mdi:pill';
-      case CATEGORY_NAMES.BABY: return 'mdi:baby-carriage';
-      case CATEGORY_NAMES.GENERAL: return 'mdi:shopping-outline';
-    }
-  }
-
-  return 'fluent-emoji-flat:shopping-bags';
+  return 'fluent-emoji-flat:jar';
 };
