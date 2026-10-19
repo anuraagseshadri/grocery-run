@@ -30,6 +30,8 @@ interface GroceryItem {
   trackHabit?: boolean;
 }
 
+type HabitStatus = 'Restock Soon' | 'In Stock' | 'Lapsed' | 'Need Data';
+
 const normalizeItemName = (name: string) => {
   let n = name.trim().toLowerCase();
   if (n.endsWith('ies')) return n.slice(0, -3) + 'y'; 
@@ -64,6 +66,9 @@ const DEFAULT_VELOCITY: Record<string, number> = {
   'paper towels': 30,
   'laundry detergent': 45
 };
+
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+const MIN_CYCLE_GAP_MS = 3 * MS_PER_DAY; // Merge purchases within 72h as a single stock-up event
 
 export default function App() {
   useEffect(() => {
@@ -556,7 +561,6 @@ export default function App() {
       if (!order.date || !order.items) return;
       const orderTime = new Date(order.date).getTime();
 
-      // Ensure distinct items per order to prevent inflation
       const processedInThisOrder = new Set<string>();
 
       order.items.forEach((item: GroceryItem) => {
@@ -591,11 +595,10 @@ export default function App() {
     });
 
     const now = new Date().getTime();
-    const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
     const dashboard = Object.values(itemHistory).map(record => {
-      let daysSinceLast = null;
-      let status: 'Restock Soon' | 'In Stock' | 'Need Data' = 'Need Data';
+      let daysSinceLast: number | null = null;
+      let status: HabitStatus = 'Need Data';
       let progressPercent = 0;
       let rawUrgencyRatio = 0;
       let lastPurchasedStore = 'Unknown';
@@ -610,21 +613,38 @@ export default function App() {
         lastPurchasedStore = preferences[itemNameKey]?.lastPurchasedStore || lastPurchase.store;
         daysSinceLast = (now - lastPurchase.date) / MS_PER_DAY;
 
-        if (record.history.length >= 2) {
-          let totalIntervalMs = 0;
-          for (let i = 1; i < sortedHistory.length; i++) {
-            totalIntervalMs += (sortedHistory[i].date - sortedHistory[i - 1].date);
+        // Consolidate purchases within 3 days (72h) into a single stock-up event
+        const distinctEvents: { date: number; store: string }[] = [sortedHistory[0]];
+        for (let i = 1; i < sortedHistory.length; i++) {
+          if (sortedHistory[i].date - distinctEvents[distinctEvents.length - 1].date >= MIN_CYCLE_GAP_MS) {
+            distinctEvents.push(sortedHistory[i]);
+          } else {
+            // Update to the latest timestamp within the same 3-day stock-up window
+            distinctEvents[distinctEvents.length - 1] = sortedHistory[i];
           }
-          const rawIntervalDays = (totalIntervalMs / (sortedHistory.length - 1)) / MS_PER_DAY;
-          effectiveInterval = Math.max(rawIntervalDays, 1);
+        }
+
+        if (distinctEvents.length >= 2) {
+          let totalIntervalMs = 0;
+          for (let i = 1; i < distinctEvents.length; i++) {
+            totalIntervalMs += (distinctEvents[i].date - distinctEvents[i - 1].date);
+          }
+          const rawIntervalDays = (totalIntervalMs / (distinctEvents.length - 1)) / MS_PER_DAY;
+          effectiveInterval = Math.max(rawIntervalDays, 3);
 
           rawUrgencyRatio = daysSinceLast / effectiveInterval;
-          progressPercent = Math.min(Math.max(rawUrgencyRatio * 100, 8), 100);
+          const decayCeilingDays = Math.max(effectiveInterval * 2.5, 14);
 
-          if (daysSinceLast >= (effectiveInterval * 0.9)) {
+          if (daysSinceLast > decayCeilingDays) {
+            // 2.5x Cycle Decay: Item is dormant/lapsed rather than actively needing a restock alert
+            status = 'Lapsed';
+            progressPercent = 0;
+          } else if (daysSinceLast >= (effectiveInterval * 0.9)) {
             status = 'Restock Soon';
+            progressPercent = Math.min(Math.max(rawUrgencyRatio * 100, 8), 100);
           } else {
             status = 'In Stock';
+            progressPercent = Math.min(Math.max(rawUrgencyRatio * 100, 8), 100);
           }
         } else {
           status = 'Need Data';
@@ -637,18 +657,32 @@ export default function App() {
         ? autoTagItem(record.itemData.name).category
         : normalizeCategoryName(savedOrItemCat);
 
+      const roundedDaysSince = daysSinceLast !== null ? Math.round(daysSinceLast) : null;
+      const roundedAvgCycle = effectiveInterval ? Math.round(effectiveInterval) : null;
+
+      // Only grant 'Frequently Purchased' if bought 5+ times AND actively purchased within recency window
+      const isFrequentlyPurchased = 
+        record.isTracked &&
+        record.count >= 5 && 
+        status !== 'Lapsed' && 
+        status !== 'Need Data' &&
+        roundedDaysSince !== null &&
+        roundedDaysSince <= 45;
+
       return {
         ...record.itemData,
+        id: itemNameKey,
         category: cleanCategory,
         store: lastPurchasedStore !== 'Unknown' ? lastPurchasedStore : record.itemData.store,
         trackHabit: record.isTracked,
         totalPurchases: record.count,
-        avgIntervalDays: effectiveInterval ? Math.round(effectiveInterval) : null,
-        daysSinceLast: daysSinceLast !== null ? Math.round(daysSinceLast) : null,
+        avgIntervalDays: roundedAvgCycle,
+        daysSinceLast: roundedDaysSince,
         lastPurchasedStore,
         status,
         progressPercent,
-        rawUrgencyRatio
+        rawUrgencyRatio,
+        isFrequentlyPurchased
       };
     });
 
@@ -677,28 +711,41 @@ export default function App() {
     
     result.sort((a, b) => {
       if (habitSortFilter === 'urgency' && habitTab === 'tracked') {
+        // Tier Order: 1. Restock Soon (Red), 2. In Stock (Green), 3. Lapsed (Buy Again), 4. Need Data (Yellow)
         const statusRank: Record<string, number> = {
           'Restock Soon': 1,
           'In Stock': 2,
-          'Need Data': 3
+          'Lapsed': 3,
+          'Need Data': 4
         };
-        const rankA = statusRank[a.status] ?? 4;
-        const rankB = statusRank[b.status] ?? 4;
+        const rankA = statusRank[a.status] ?? 5;
+        const rankB = statusRank[b.status] ?? 5;
         if (rankA !== rankB) return rankA - rankB;
 
-        // High frequency staple prioritization for Restock Soon items
-        if (a.status === 'Restock Soon' && b.status === 'Restock Soon') {
-          if (b.totalPurchases !== a.totalPurchases) {
-            return b.totalPurchases - a.totalPurchases; 
+        // Inside Restock Soon & In Stock: Sort by Shortest Avg Cycle first (7d -> 12d -> 15d -> 24d)
+        if (a.status === 'Restock Soon' || a.status === 'In Stock') {
+          const cycleA = a.avgIntervalDays ?? 9999;
+          const cycleB = b.avgIntervalDays ?? 9999;
+          if (cycleA !== cycleB) {
+            return cycleA - cycleB;
           }
-          // Uncapped urgency ratio tie-breaker for items with the same purchase count
+          // Tie-breaker: higher purchase frequency first, then uncapped urgency ratio
+          if (b.totalPurchases !== a.totalPurchases) {
+            return b.totalPurchases - a.totalPurchases;
+          }
           if (b.rawUrgencyRatio !== a.rawUrgencyRatio) {
             return b.rawUrgencyRatio - a.rawUrgencyRatio;
           }
         }
 
-        const diff = Math.round(b.progressPercent) - Math.round(a.progressPercent);
-        return diff !== 0 ? diff : compareByCategoryAndName(a, b);
+        // Inside Lapsed: Sort by most recently lapsed first (e.g., 55d ago before 130d ago)
+        if (a.status === 'Lapsed') {
+          const daysA = a.daysSinceLast ?? 9999;
+          const daysB = b.daysSinceLast ?? 9999;
+          if (daysA !== daysB) return daysA - daysB;
+        }
+
+        return compareByCategoryAndName(a, b);
       } else if (habitSortFilter === 'recent') {
         const daysA = a.daysSinceLast !== null ? a.daysSinceLast : 9999;
         const daysB = b.daysSinceLast !== null ? b.daysSinceLast : 9999;
@@ -756,74 +803,20 @@ export default function App() {
     );
   };
 
+  // Sync top-of-list "You might be running out of" suggestions with the exact same 2.5x decay & 3-day rules
   const suggestedReplenishments = useMemo(() => {
-    const itemHistory: Record<string, { itemData: GroceryItem, latestOrderTime: number, dates: number[], isTracked: boolean }> = {};
-    
-    purchaseHistory.forEach(order => {
-      if (!order.date || !order.items) return;
-      const orderTime = new Date(order.date).getTime(); 
-      order.items.forEach((item: GroceryItem) => {
-        const rawNameKey = (item.name || '').toLowerCase();
-        const itemNameKey = normalizeItemName(rawNameKey); 
-        
-        let currentTrackState = item.trackHabit !== false;
-        if (trackingOverrides[itemNameKey] !== undefined) {
-          currentTrackState = trackingOverrides[itemNameKey];
-        } else if (preferences[itemNameKey] && preferences[itemNameKey].trackHabit !== undefined) {
-          currentTrackState = preferences[itemNameKey].trackHabit;
-        } else if (item.trackHabit !== undefined) {
-          currentTrackState = item.trackHabit;
-        }
-
-        if (!itemHistory[itemNameKey]) {
-          itemHistory[itemNameKey] = { itemData: item, latestOrderTime: orderTime, dates: [], isTracked: currentTrackState };
-        } else {
-          itemHistory[itemNameKey].isTracked = currentTrackState;
-          if (orderTime >= itemHistory[itemNameKey].latestOrderTime) {
-            itemHistory[itemNameKey].itemData = item;
-            itemHistory[itemNameKey].latestOrderTime = orderTime;
-          }
-        }
-        itemHistory[itemNameKey].dates.push(orderTime);
-      });
-    });
-
-    const now = new Date().getTime();
-    const suggestions: GroceryItem[] = [];
-    const MS_PER_DAY = 1000 * 60 * 60 * 24;
-
-    Object.values(itemHistory).forEach(record => {
-      if (!record.isTracked) return; 
-      
-      const rawNameKey = record.itemData.name.toLowerCase();
-      const itemNameKey = normalizeItemName(rawNameKey);
-      if (dismissedSuggestions.has(rawNameKey) || dismissedSuggestions.has(itemNameKey)) return;
-
-      if (record.dates.length >= 2) {
-        const sortedDates = [...record.dates].sort((a, b) => a - b);
-        let totalIntervalMs = 0;
-        for (let i = 1; i < sortedDates.length; i++) {
-          totalIntervalMs += (sortedDates[i] - sortedDates[i - 1]);
-        }
-        const rawIntervalDays = (totalIntervalMs / (sortedDates.length - 1)) / MS_PER_DAY;
-        const effectiveInterval = Math.max(rawIntervalDays, 3);
-
-        const lastPurchaseTime = sortedDates[sortedDates.length - 1];
-        const daysSinceLast = (now - lastPurchaseTime) / MS_PER_DAY;
-        if (daysSinceLast >= (effectiveInterval * 0.9) && daysSinceLast > 2) {
-          const alreadyOnList = items.some(i => normalizeItemName(i.name) === normalizeItemName(record.itemData.name));
-          if (!alreadyOnList) {
-            const latestStore = preferences[itemNameKey]?.lastPurchasedStore || record.itemData.store;
-            suggestions.push({
-              ...record.itemData,
-              store: latestStore
-            });
-          }
-        }
-      }
-    });
-    return suggestions;
-  }, [purchaseHistory, items, dismissedSuggestions, trackingOverrides, preferences]);
+    return habitsDashboardData
+      .filter(habit => {
+        if (!habit.trackHabit) return false;
+        if (habit.status !== 'Restock Soon') return false;
+        const rawKey = habit.name.toLowerCase();
+        const normKey = normalizeItemName(rawKey);
+        if (dismissedSuggestions.has(rawKey) || dismissedSuggestions.has(normKey)) return false;
+        const alreadyOnList = items.some(i => normalizeItemName(i.name) === normKey);
+        return !alreadyOnList;
+      })
+      .sort((a, b) => (a.avgIntervalDays ?? 999) - (b.avgIntervalDays ?? 999));
+  }, [habitsDashboardData, items, dismissedSuggestions]);
 
   if (loading) {
     return (
@@ -901,7 +894,7 @@ export default function App() {
                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                   {suggestedReplenishments.map(item => (
                     <div 
-                      key={`suggest-${item.name}`}
+                      key={`suggest-${item.id}`}
                       className="flex items-center bg-transparent rounded-full border border-primary/20 hover:border-primary/50 hover:bg-primary/5 transition-all"
                     >
                       <button 
@@ -1251,7 +1244,6 @@ export default function App() {
                 {filteredAndSortedHabits.map((habit) => {
                   const isAlreadyOnList = listTabItems.some(i => normalizeItemName(i.name) === normalizeItemName(habit.name));
                   const displayHabitCat = normalizeCategoryName(habit.category);
-                  const isFrequentlyPurchased = habitTab === 'tracked' && habit.totalPurchases >= 5;
                   
                   const getTrackedButtonConfig = () => {
                     if (isAlreadyOnList) {
@@ -1264,6 +1256,12 @@ export default function App() {
                       return {
                         label: 'Restock Soon',
                         className: 'bg-[#FFE4E6] text-[#BE123C] hover:bg-rose-100 shadow-sm'
+                      };
+                    }
+                    if (habit.status === 'Lapsed') {
+                      return {
+                        label: 'Buy Again',
+                        className: 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 shadow-sm'
                       };
                     }
                     if (habit.status === 'Need Data') {
@@ -1352,7 +1350,7 @@ export default function App() {
                             <span>{displayHabitCat}</span>
                           </span>
 
-                          {isFrequentlyPurchased && (
+                          {habitTab === 'tracked' && habit.isFrequentlyPurchased && (
                             <span className="w-fit inline-flex items-center gap-1 text-[10px] font-label font-bold px-2.5 py-1 rounded-md bg-amber-100 text-amber-900 border border-amber-200 shadow-sm whitespace-nowrap">
                               <span className="material-symbols-outlined text-[13px] text-amber-600">bolt</span>
                               <span>Frequently Purchased</span>
@@ -1368,7 +1366,8 @@ export default function App() {
                         )}
                       </div>
                       
-                      {habitTab === 'tracked' && habit.status !== 'Need Data' && (
+                      {/* Active cycle progress bar for Restock Soon & In Stock */}
+                      {habitTab === 'tracked' && (habit.status === 'Restock Soon' || habit.status === 'In Stock') && (
                         <>
                           <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
                             <div 
@@ -1378,8 +1377,7 @@ export default function App() {
                               style={{ width: `${habit.progressPercent}%` }}
                             />
                           </div>
-                          <div className="flex justify-between items-center mt-2 pt-1">
-                            <span className="text-[11px] text-slate-400 font-medium"></span>
+                          <div className="flex justify-end items-center mt-2 pt-1">
                             <button 
                               onClick={() => handleToggleTracking(habit.name, false)}
                               className="text-slate-400 hover:text-slate-600 font-semibold text-xs flex items-center gap-1 transition-colors px-2 py-1 rounded"
@@ -1391,6 +1389,24 @@ export default function App() {
                         </>
                       )}
 
+                      {/* Lapsed / Dormant items (>2.5x past cycle) */}
+                      {habitTab === 'tracked' && habit.status === 'Lapsed' && (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-100">
+                          <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-[14px] text-slate-400 shrink-0">history</span>
+                            Past normal {habit.avgIntervalDays}d cycle — buy again to resume reminders
+                          </p>
+                          <button 
+                            onClick={() => handleToggleTracking(habit.name, false)}
+                            className="text-slate-400 hover:text-slate-600 font-semibold text-xs flex items-center gap-1 transition-colors px-1 py-1 rounded shrink-0 self-end sm:self-auto"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">do_not_disturb_on</span>
+                            Stop tracking (move to untracked)
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Need Data items (<2 distinct purchase cycles) */}
                       {habitTab === 'tracked' && habit.status === 'Need Data' && (
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-100">
                           <p className="text-[11px] text-amber-800 font-medium flex items-center gap-1.5">
