@@ -613,13 +613,11 @@ export default function App() {
         lastPurchasedStore = preferences[itemNameKey]?.lastPurchasedStore || lastPurchase.store;
         daysSinceLast = (now - lastPurchase.date) / MS_PER_DAY;
 
-        // Consolidate purchases within 3 days (72h) into a single stock-up event
         const distinctEvents: { date: number; store: string }[] = [sortedHistory[0]];
         for (let i = 1; i < sortedHistory.length; i++) {
           if (sortedHistory[i].date - distinctEvents[distinctEvents.length - 1].date >= MIN_CYCLE_GAP_MS) {
             distinctEvents.push(sortedHistory[i]);
           } else {
-            // Update to the latest timestamp within the same 3-day stock-up window
             distinctEvents[distinctEvents.length - 1] = sortedHistory[i];
           }
         }
@@ -636,7 +634,6 @@ export default function App() {
           const decayCeilingDays = Math.max(effectiveInterval * 2.5, 14);
 
           if (daysSinceLast > decayCeilingDays) {
-            // 2.5x Cycle Decay: Item is dormant/lapsed rather than actively needing a restock alert
             status = 'Lapsed';
             progressPercent = 0;
           } else if (daysSinceLast >= (effectiveInterval * 0.9)) {
@@ -660,7 +657,6 @@ export default function App() {
       const roundedDaysSince = daysSinceLast !== null ? Math.round(daysSinceLast) : null;
       const roundedAvgCycle = effectiveInterval ? Math.round(effectiveInterval) : null;
 
-      // Only grant 'Frequently Purchased' if bought 5+ times AND actively purchased within recency window
       const isFrequentlyPurchased = 
         record.isTracked &&
         record.count >= 5 && 
@@ -711,7 +707,6 @@ export default function App() {
     
     result.sort((a, b) => {
       if (habitSortFilter === 'urgency' && habitTab === 'tracked') {
-        // Tier Order: 1. Restock Soon (Red), 2. In Stock (Green), 3. Lapsed (Buy Again), 4. Need Data (Yellow)
         const statusRank: Record<string, number> = {
           'Restock Soon': 1,
           'In Stock': 2,
@@ -722,14 +717,12 @@ export default function App() {
         const rankB = statusRank[b.status] ?? 5;
         if (rankA !== rankB) return rankA - rankB;
 
-        // Inside Restock Soon & In Stock: Sort by Shortest Avg Cycle first (7d -> 12d -> 15d -> 24d)
         if (a.status === 'Restock Soon' || a.status === 'In Stock') {
           const cycleA = a.avgIntervalDays ?? 9999;
           const cycleB = b.avgIntervalDays ?? 9999;
           if (cycleA !== cycleB) {
             return cycleA - cycleB;
           }
-          // Tie-breaker: higher purchase frequency first, then uncapped urgency ratio
           if (b.totalPurchases !== a.totalPurchases) {
             return b.totalPurchases - a.totalPurchases;
           }
@@ -738,7 +731,6 @@ export default function App() {
           }
         }
 
-        // Inside Lapsed: Sort by most recently lapsed first (e.g., 55d ago before 130d ago)
         if (a.status === 'Lapsed') {
           const daysA = a.daysSinceLast ?? 9999;
           const daysB = b.daysSinceLast ?? 9999;
@@ -746,11 +738,26 @@ export default function App() {
         }
 
         return compareByCategoryAndName(a, b);
+
       } else if (habitSortFilter === 'recent') {
         const daysA = a.daysSinceLast !== null ? a.daysSinceLast : 9999;
         const daysB = b.daysSinceLast !== null ? b.daysSinceLast : 9999;
         if (daysA !== daysB) return daysA - daysB;
-        return compareByCategoryAndName(a, b);
+
+        // Option B: Group by Category first, then sort items within each category by Shortest Avg Cycle first!
+        const catA = normalizeCategoryName(a.category);
+        const catB = normalizeCategoryName(b.category);
+        const orderA = categoryOrderMap[catA] ?? 99;
+        const orderB = categoryOrderMap[catB] ?? 99;
+        if (orderA !== orderB) return orderA - orderB;
+
+        if (habitTab === 'tracked') {
+          const cycleA = a.avgIntervalDays ?? 9999;
+          const cycleB = b.avgIntervalDays ?? 9999;
+          if (cycleA !== cycleB) return cycleA - cycleB;
+        }
+        return a.name.localeCompare(b.name);
+
       } else if (habitSortFilter === 'frequent') {
         if (b.totalPurchases !== a.totalPurchases) return b.totalPurchases - a.totalPurchases;
         return compareByCategoryAndName(a, b);
@@ -803,7 +810,6 @@ export default function App() {
     );
   };
 
-  // Sync top-of-list "You might be running out of" suggestions with the exact same 2.5x decay & 3-day rules
   const suggestedReplenishments = useMemo(() => {
     return habitsDashboardData
       .filter(habit => {
@@ -1366,7 +1372,6 @@ export default function App() {
                         )}
                       </div>
                       
-                      {/* Active cycle progress bar for Restock Soon & In Stock */}
                       {habitTab === 'tracked' && (habit.status === 'Restock Soon' || habit.status === 'In Stock') && (
                         <>
                           <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
@@ -1389,7 +1394,6 @@ export default function App() {
                         </>
                       )}
 
-                      {/* Lapsed / Dormant items (>2.5x past cycle) */}
                       {habitTab === 'tracked' && habit.status === 'Lapsed' && (
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-100">
                           <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5">
@@ -1406,7 +1410,6 @@ export default function App() {
                         </div>
                       )}
 
-                      {/* Need Data items (<2 distinct purchase cycles) */}
                       {habitTab === 'tracked' && habit.status === 'Need Data' && (
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-100">
                           <p className="text-[11px] text-amber-800 font-medium flex items-center gap-1.5">
