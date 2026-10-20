@@ -10,7 +10,6 @@ export default function AddItemForm({ onAddItem, suggestions = [] }: AddItemForm
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Filter and limit to top 5 suggestions
   const filteredSuggestions = suggestions.filter(s => 
     s.toLowerCase().includes(inputValue.toLowerCase()) && 
     s.toLowerCase() !== inputValue.toLowerCase()
@@ -68,7 +67,6 @@ export default function AddItemForm({ onAddItem, suggestions = [] }: AddItemForm
         )}
       </form>
 
-      {/* Autocomplete Dropdown */}
       {showDropdown && inputValue.trim() && filteredSuggestions.length > 0 && (
         <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-fade-in divide-y divide-slate-100">
           {filteredSuggestions.map((suggestion, idx) => (

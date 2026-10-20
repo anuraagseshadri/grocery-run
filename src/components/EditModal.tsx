@@ -74,7 +74,6 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
         className="bg-white text-slate-900 rounded-3xl w-full max-w-md shadow-2xl flex flex-col max-h-[75vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()} 
       >
-        
         <div className="flex justify-between items-center p-6 pb-4 shrink-0">
           <h2 className="text-2xl font-bold text-slate-800">Edit Item</h2>
           <button onClick={onClose} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:text-slate-800 transition-colors">
@@ -96,7 +95,7 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
           <div className="flex flex-col gap-2 shrink-0 mt-1">
             <div className="flex flex-col">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tracking Status</span>
-              <span className="text-xs text-slate-400 mt-0.5">Choose how Grocery Run calculates restock predictions in Habits.</span>
+              <span className="text-xs text-slate-400 mt-0.5">Control whether this item generates restock cadence predictions.</span>
             </div>
             
             <div className="grid grid-cols-2 gap-3 pt-1">
@@ -116,7 +115,7 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
                   )}
                 </div>
                 <p className={`text-[11px] leading-tight font-medium ${trackHabit !== false ? 'text-[#2b5940]' : 'text-slate-400'}`}>
-                  Smart restock reminders & auto replenishment
+                  Calculates cycles & restock reminders in Habits
                 </p>
               </button>
 
@@ -136,7 +135,7 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
                   )}
                 </div>
                 <p className={`text-[11px] leading-tight font-medium ${trackHabit === false ? 'text-[#713f12]' : 'text-slate-400'}`}>
-                  Single purchase, won't clutter routine list
+                  Single run only, never logs to Habits
                 </p>
               </button>
             </div>
@@ -196,7 +195,6 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
         </div>
 
         <div className="flex justify-between items-center p-6 pt-5 mt-2 border-t border-slate-100 gap-6 shrink-0 bg-white">
-          
           <button 
             onClick={() => onForget(item.name)} 
             className="text-red-400 text-xs font-bold hover:bg-red-50 hover:text-red-600 px-2 py-2 rounded-xl transition-colors shrink-0"
