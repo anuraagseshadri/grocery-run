@@ -337,7 +337,6 @@ export default function App() {
     setHasDismissedReminder(false);
     setExpandedCartStore(null);
 
-    // GATE: Only items marked trackHabit !== false are written to habits history
     const trackableHabitItems = cartItems.filter(item => item.trackHabit !== false);
 
     if (trackableHabitItems.length > 0) {
@@ -370,26 +369,8 @@ export default function App() {
     }
   };
 
-  const handlePurgeHabits = async () => {
-    if (!user) return;
-    if (!window.confirm("Are you sure you want to completely purge your Habit recommendations? This deletes your entire purchase history and cannot be undone.")) return;
-    
-    setToastMessage("Purging habit data...");
-    
-    try {
-      for (const order of purchaseHistory) {
-        await deleteDoc(doc(db, 'purchaseHistory', order.id));
-      }
-      setToastMessage("All habit recommendations have been successfully reset.");
-      setSelectedHabitIds(new Set());
-      setIsSelectionMode(false);
-    } catch (err) {
-      setToastMessage("Failed to completely purge data. Check your connection.");
-    }
-  };
-
-  // CORE DATA PRUNING LOGIC
-  const executePurgeItems = async (itemKeys: string[]) => {
+  // CORE DATA PRUNING LOGIC (With exact item name support for Toast)
+  const executePurgeItems = async (itemKeys: string[], singleDisplayName?: string) => {
     if (!user || itemKeys.length === 0) return;
     const targetSet = new Set(itemKeys.map(k => normalizeItemName(k)));
 
@@ -418,7 +399,13 @@ export default function App() {
         }, { merge: true });
       }
 
-      setToastMessage(`Removed ${itemKeys.length === 1 ? 'item' : `${itemKeys.length} items`} from Habits.`);
+      if (itemKeys.length === 1 && singleDisplayName) {
+        const formattedName = singleDisplayName.charAt(0).toUpperCase() + singleDisplayName.slice(1);
+        setToastMessage(`Removed ${formattedName} from Habits.`);
+      } else {
+        setToastMessage(`Removed ${itemKeys.length} items from Habits.`);
+      }
+
       setSelectedHabitIds(new Set());
       setIsSelectionMode(false);
       setSwipedCardId(null);
@@ -857,61 +844,38 @@ export default function App() {
       } else {
         next.add(id);
       }
+      if (next.size === 0) {
+        setIsSelectionMode(false);
+      }
       return next;
     });
   };
 
+  const isAllSelected = filteredAndSortedHabits.length > 0 && selectedHabitIds.size === filteredAndSortedHabits.length;
+
   const handleSelectAll = () => {
-    if (selectedHabitIds.size === filteredAndSortedHabits.length) {
+    if (isAllSelected) {
       setSelectedHabitIds(new Set());
+      setIsSelectionMode(false);
     } else {
       setSelectedHabitIds(new Set(filteredAndSortedHabits.map(h => h.id)));
     }
   };
 
-  // STORE LOGO RENDERER MATCHING MOCKUP BADGES
+  // UNIFIED STORE LOGO RENDERER (Matches List Tab Store Logos & Enlarges Shoppers)
   const renderHabitStoreLogo = (rawStoreName?: string) => {
     const cleanName = rawStoreName?.trim() || 'Other';
-    const lower = cleanName.toLowerCase();
-
-    if (lower.includes('freshco') || lower.includes('fresh co')) {
-      return (
-        <div className="mt-1">
-          <span className="bg-[#d8e438] text-[#1a4d1a] font-extrabold text-[11px] px-1.5 py-0.5 rounded tracking-tight inline-block shadow-xs">
-            FRESH CO
-          </span>
-        </div>
-      );
-    }
-
-    if (lower.includes('costco')) {
-      return (
-        <div className="mt-1 flex items-baseline">
-          <span className="text-[#e31837] font-black text-[12px] tracking-tight italic">COSTCO</span>
-          <span className="text-[#0060a9] text-[8px] font-black tracking-tighter ml-0.5 uppercase">wholesale</span>
-        </div>
-      );
-    }
-
-    if (lower.includes('walmart')) {
-      return (
-        <div className="mt-1">
-          <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-            Walmart
-          </span>
-        </div>
-      );
-    }
-
-    const officialStore = STORE_OPTIONS.find(s => s.name.toLowerCase() === lower);
+    const officialStore = STORE_OPTIONS.find(
+      s => s.name.toLowerCase() === cleanName.toLowerCase()
+    );
 
     if (officialStore?.imageLogo) {
       return (
-        <div className="mt-1 flex items-center h-6">
+        <div className="mt-1 flex items-center h-7">
           <img 
             src={officialStore.imageLogo} 
             alt={officialStore.name} 
-            className="h-5 max-w-[110px] object-contain object-left" 
+            className="h-6 sm:h-7 max-w-[135px] object-contain object-left" 
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
         </div>
@@ -919,8 +883,8 @@ export default function App() {
     }
 
     return (
-      <div className="mt-1">
-        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider truncate max-w-full ${officialStore?.color || 'bg-slate-100 text-slate-700 border border-slate-200'}`}>
+      <div className="mt-1 flex items-center">
+        <span className={`inline-block px-2.5 py-0.5 rounded-md border text-[11px] font-headline font-bold uppercase tracking-wider truncate max-w-full ${officialStore?.color || 'bg-white border-slate-200 text-slate-700'}`}>
           {officialStore?.logo || officialStore?.name || cleanName}
         </span>
       </div>
@@ -999,7 +963,7 @@ export default function App() {
         </div>
       )}
 
-      <div className="w-full flex flex-col gap-6 mt-4 pb-28">
+      <div className="w-full flex flex-col gap-6 mt-4 pb-32">
         
         {activeTab === 'list' && (
           <>
@@ -1288,7 +1252,7 @@ export default function App() {
                   <h2 className="text-xl font-headline font-bold text-slate-900">Habits Dashboard</h2>
                 </div>
 
-                {/* EXACT MOCKUP: BATCH SELECTION CONTROL BAR */}
+                {/* BATCH SELECTION CONTROL BAR */}
                 {isSelectionMode ? (
                   <div className="bg-white rounded-2xl p-3 shadow-sm border border-emerald-800/10 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
@@ -1297,33 +1261,39 @@ export default function App() {
                           setIsSelectionMode(false);
                           setSelectedHabitIds(new Set());
                         }}
-                        className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-2.5 py-1 rounded-lg bg-slate-100 transition-colors"
+                        className="text-xs font-semibold text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-lg bg-slate-100 transition-colors"
                       >
                         Cancel
                       </button>
                       <div className="flex items-center space-x-1.5 px-3 py-1 bg-emerald-50 rounded-full border border-emerald-200">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                         <span className="text-xs font-bold text-emerald-800 tracking-tight">
-                          {selectedHabitIds.size} Items Selected
+                          {selectedHabitIds.size} {selectedHabitIds.size === 1 ? 'Item' : 'Items'} Selected
                         </span>
                       </div>
                       <button 
                         onClick={handleSelectAll}
-                        className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-50/70 border border-emerald-200/60"
+                        className={`text-xs font-bold flex items-center space-x-1 px-2.5 py-1.5 rounded-lg border transition-colors ${
+                          isAllSelected 
+                            ? 'bg-emerald-600 text-white border-emerald-600' 
+                            : 'text-emerald-700 hover:text-emerald-800 bg-emerald-50/70 border-emerald-200/60'
+                        }`}
                       >
-                        <span className="material-symbols-outlined text-[14px]">check_box</span>
+                        {isAllSelected && (
+                          <span className="material-symbols-outlined text-[14px]">check</span>
+                        )}
                         <span>Select All ({filteredAndSortedHabits.length})</span>
                       </button>
                     </div>
                     <p className="text-[11px] text-slate-500 text-center font-medium leading-tight px-1">
-                      Select items to reset cadence predictions or permanently erase habit history.
+                      Tap cards in any order to remove them from Habits.
                     </p>
                   </div>
                 ) : (
                   <div className="bg-[#EFF6FF] border border-[#DBEAFE] rounded-2xl p-3 flex items-start space-x-2.5 text-xs text-[#1E40AF] shadow-xs">
-                    <span className="text-blue-600 text-base leading-none mt-0.5 font-bold">✦</span>
+                    <span className="material-symbols-outlined text-blue-600 text-[18px] mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
                     <p className="leading-snug text-[12px]">
-                      <strong className="font-bold">How it works:</strong> Habits predicts when you run out of an item based on its purchase frequency. Long-press any card to enter multi-select, or swipe left to remove an item.
+                      <strong className="font-bold">How it works:</strong> Habits predicts when you run out of an item based on its purchase frequency. Long-press any card to select multiple items, or swipe left to remove an item.
                     </p>
                   </div>
                 )}
@@ -1408,21 +1378,27 @@ export default function App() {
                       key={habit.id}
                       className="relative overflow-hidden rounded-3xl select-none"
                     >
-                      {/* REVEALED ACTION PANEL MATCHING MOCKUP */}
+                      {/* REVEALED ACTION PANEL (Hidden during selection mode to prevent bleed-through) */}
                       <div 
-                        onClick={() => setSingleRemoveModalItem(habit)}
-                        className="absolute inset-0 bg-[#DC2626] rounded-3xl flex items-center justify-end px-5 z-0 cursor-pointer active:brightness-90 transition-all"
+                        onClick={() => {
+                          if (!isSelectionMode) {
+                            setSingleRemoveModalItem(habit);
+                          }
+                        }}
+                        className={`absolute inset-0 bg-[#DC2626] rounded-3xl flex items-center justify-end z-0 cursor-pointer active:brightness-90 transition-all ${
+                          isSelectionMode ? 'hidden' : ''
+                        }`}
                       >
-                        <div className="flex flex-col items-center justify-center text-white space-y-1">
+                        <div className="w-[140px] px-2 flex flex-col items-center justify-center text-white text-center space-y-1">
                           <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shadow-xs">
                             <span className="material-symbols-outlined text-white text-xl">delete</span>
                           </div>
-                          <span className="text-xs font-bold tracking-tight">Remove from Habits</span>
-                          <span className="text-[10px] text-white/80 font-medium">Clear history</span>
+                          <span className="text-[11px] font-bold tracking-tight leading-tight">Remove from Habits</span>
+                          <span className="text-[9px] text-white/85 font-medium leading-tight">Clear purchase history</span>
                         </div>
                       </div>
 
-                      {/* FRONT CARD SURFACE MATCHING MOCKUP */}
+                      {/* FRONT CARD SURFACE (Always 100% opaque bg-white) */}
                       <article 
                         onTouchStart={(e) => handleTouchStart(habit.id, e)}
                         onTouchMove={(e) => handleTouchMove(habit.id, e)}
@@ -1435,56 +1411,58 @@ export default function App() {
                           }
                         }}
                         className={`relative bg-white rounded-3xl shadow-sm transition-all duration-200 z-10 p-4 ${
-                          isSwiped ? '-translate-x-[118px]' : 'translate-x-0'
+                          !isSelectionMode && isSwiped ? '-translate-x-[140px]' : 'translate-x-0'
                         } ${
                           isSelectionMode && isSelected 
-                            ? 'border-2 border-emerald-500' 
+                            ? 'border-2 border-emerald-500 ring-2 ring-emerald-500/15' 
                             : isSelectionMode 
-                            ? 'border-2 border-transparent opacity-85 hover:opacity-100' 
+                            ? 'border-2 border-slate-200/80' 
                             : 'border border-slate-100/90'
                         }`}
                       >
-                        {/* TOP ROW: Checkbox + Emoji + Title + Pill */}
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-3">
+                        {/* TOP ROW: Checkbox + Emoji + Title + Status Pill */}
+                        <div className="flex items-center justify-between mb-3 gap-2">
+                          <div className="flex items-center space-x-3 min-w-0 flex-1">
                             {isSelectionMode && (
                               <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all shrink-0 ${
                                 isSelected 
                                   ? 'bg-emerald-600 text-white shadow-xs' 
                                   : 'border-2 border-slate-300 bg-white'
                               }`}>
-                                {isSelected && <span className="material-symbols-outlined text-[13px] font-bold">check</span>}
+                                {isSelected && <span className="material-symbols-outlined text-[14px] font-bold">check</span>}
                               </div>
                             )}
-                            <div className="flex items-center space-x-2">
-                              <span className="text-xl">
+                            <div className="flex items-center space-x-2 min-w-0">
+                              <span className="text-xl shrink-0">
                                 <Icon icon={getItemIcon(habit.name, displayHabitCat)} className="text-xl" />
                               </span>
-                              <h2 className="text-lg font-bold text-slate-900 capitalize">
+                              <h2 className="text-lg font-bold text-slate-900 capitalize truncate">
                                 {habit.name}
                               </h2>
                             </div>
                           </div>
 
-                          {!isSelectionMode && (
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAddFromHabits(habit, true);
-                              }}
-                              disabled={isAlreadyOnList}
-                              className={`px-3 py-1 rounded-full flex items-center space-x-1 transition-all active:scale-95 shrink-0 ${trackedBtn.className}`}
-                            >
-                              <span>{trackedBtn.label}</span>
-                              <span className="material-symbols-outlined text-xs font-bold">
-                                {isAlreadyOnList ? 'check' : 'add'}
-                              </span>
-                            </button>
-                          )}
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              if (isSelectionMode) return;
+                              e.stopPropagation();
+                              handleAddFromHabits(habit, true);
+                            }}
+                            disabled={!isSelectionMode && isAlreadyOnList}
+                            className={`px-3 py-1 rounded-full flex items-center space-x-1 transition-all shrink-0 ${
+                              isSelectionMode ? 'pointer-events-none' : 'active:scale-95'
+                            } ${trackedBtn.className}`}
+                          >
+                            <span>{trackedBtn.label}</span>
+                            <span className="material-symbols-outlined text-xs font-bold">
+                              {isAlreadyOnList ? 'check' : 'add'}
+                            </span>
+                          </button>
                         </div>
 
-                        {/* 2X2 METRIC GRID BOX MATCHING MOCKUP */}
-                        <div className="bg-[#F8FAF9] rounded-2xl p-3 border border-slate-100 grid grid-cols-2 gap-y-2 gap-x-4 mb-3">
+                        {/* 2X2 METRIC GRID BOX */}
+                        <div className="bg-[#F8FAF9] rounded-2xl p-3 border border-slate-100 grid grid-cols-2 gap-y-2.5 gap-x-4 mb-3">
                           <div>
                             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Purchases</span>
                             <span className="text-base font-extrabold text-slate-800">{habit.totalPurchases}</span>
@@ -1501,21 +1479,21 @@ export default function App() {
                               {habit.daysSinceLast !== null ? `${habit.daysSinceLast}d ago` : '--'}
                             </span>
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Store</span>
                             {renderHabitStoreLogo(habit.lastPurchasedStore)}
                           </div>
                         </div>
 
-                        {/* BADGES / TAGS */}
-                        <div className="flex items-center space-x-2 mb-3">
-                          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-[#E2F7E8] text-emerald-800 text-xs font-semibold">
-                            <span>🌿</span>
+                        {/* ACCURATE CATEGORY & FREQUENTLY PURCHASED BADGES */}
+                        <div className="flex items-center flex-wrap gap-2 mb-3">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${getCategoryBgColor(displayHabitCat)}`}>
+                            <Icon icon={getCategoryIcon(displayHabitCat)} className="text-[14px] shrink-0" />
                             <span>{displayHabitCat}</span>
                           </span>
 
                           {habit.isFrequentlyPurchased && (
-                            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-[#FEF4D5] text-amber-900 text-xs font-semibold">
+                            <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-[#FEF4D5] text-amber-900 border border-amber-200/80 text-xs font-semibold">
                               <span>⚡</span>
                               <span>Frequently Purchased</span>
                             </span>
@@ -1564,27 +1542,12 @@ export default function App() {
                   </div>
                 )}
               </div>
-
-              {purchaseHistory.length > 0 && !isSelectionMode && (
-                <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col items-center">
-                  <p className="text-xs text-slate-400 mb-3 text-center px-4 max-w-xs">
-                    Need a clean slate? This will permanently delete your entire purchase history and reset all predictive restock data.
-                  </p>
-                  <button 
-                    onClick={handlePurgeHabits}
-                    className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-xl font-bold text-sm hover:bg-red-50 active:scale-95 transition-all shadow-sm"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">delete_forever</span>
-                    Purge All Habit Data
-                  </button>
-                </div>
-              )}
             </section>
           </div>
         )}
       </div>
 
-      {/* FLOATING BATCH ACTION SHEET MATCHING MOCKUP */}
+      {/* FLOATING BATCH ACTION DOCK */}
       {isSelectionMode && selectedHabitIds.size > 0 && (
         <div className="fixed bottom-[68px] inset-x-3 z-40 animate-fade-in pointer-events-auto">
           <div className="bg-slate-900/95 backdrop-blur-md rounded-2xl p-3.5 shadow-2xl border border-slate-700/60 text-white flex flex-col items-center max-w-[400px] mx-auto">
@@ -1599,13 +1562,24 @@ export default function App() {
             <p className="text-[11px] text-slate-300 font-normal mb-2.5">
               Will reset purchase history & restock cadences
             </p>
-            <button 
-              onClick={() => setBatchRemoveModalVisible(true)}
-              className="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold rounded-xl shadow-lg shadow-rose-900/40 flex items-center justify-center space-x-2 transition-all active:scale-[0.98]"
-            >
-              <span className="material-symbols-outlined text-base">delete</span>
-              <span className="text-sm">Remove Selected Data ({selectedHabitIds.size})</span>
-            </button>
+            <div className="w-full flex gap-2">
+              <button 
+                onClick={() => {
+                  setIsSelectionMode(false);
+                  setSelectedHabitIds(new Set());
+                }}
+                className="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl text-sm transition-all active:scale-[0.98]"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => setBatchRemoveModalVisible(true)}
+                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold rounded-xl shadow-lg shadow-rose-900/40 flex items-center justify-center space-x-2 transition-all active:scale-[0.98]"
+              >
+                <span className="material-symbols-outlined text-base">delete</span>
+                <span className="text-sm">Remove Selected Items ({selectedHabitIds.size})</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1614,7 +1588,10 @@ export default function App() {
       {singleRemoveModalItem && (
         <div 
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
-          onClick={() => setSingleRemoveModalItem(null)}
+          onClick={() => {
+            setSingleRemoveModalItem(null);
+            setSwipedCardId(null);
+          }}
         >
           <div 
             className="bg-white text-slate-900 rounded-3xl w-full max-w-sm shadow-2xl p-6 flex flex-col gap-4"
@@ -1629,14 +1606,14 @@ export default function App() {
                 Remove {singleRemoveModalItem.name} from Habits?
               </h3>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                This will clear its past purchase history and restock reminders. It will not remove it from your active shopping list.
+                This will clear its past purchase history and restock reminders. It will not be removed from your active shopping list.
               </p>
             </div>
 
             <div className="flex flex-col gap-2 pt-2">
               <button 
                 onClick={() => {
-                  executePurgeItems([singleRemoveModalItem.id]);
+                  executePurgeItems([singleRemoveModalItem.id], singleRemoveModalItem.name);
                   setSingleRemoveModalItem(null);
                 }}
                 className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-sm shadow-sm transition-all active:scale-95"
@@ -1644,7 +1621,10 @@ export default function App() {
                 Remove from Habits
               </button>
               <button 
-                onClick={() => setSingleRemoveModalItem(null)}
+                onClick={() => {
+                  setSingleRemoveModalItem(null);
+                  setSwipedCardId(null);
+                }}
                 className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-sm transition-all"
               >
                 Cancel
@@ -1673,7 +1653,7 @@ export default function App() {
                 Remove {selectedHabitIds.size} Items from Habits?
               </h3>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                This will clear purchase history and restock reminders for all selected items. Active list items will remain unaffected.
+                This will clear purchase history and restock reminders for all selected items. They will not be removed from your active shopping list.
               </p>
             </div>
 
