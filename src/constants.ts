@@ -104,7 +104,7 @@ export const CATEGORIES = [
   { name: CATEGORY_NAMES.PHARMACY_AND_PERSONAL_CARE, icon: 'mdi:pill' },
   { name: CATEGORY_NAMES.BABY, icon: 'mdi:baby-carriage' },
   { name: CATEGORY_NAMES.PANTRY, icon: 'mdi:cupboard-outline' },
-  { name: CATEGORY_NAMES.EVERYDAY_AND_RETAIL, icon: 'mdi:shopping-outline' }
+  { name: CATEGORY_NAMES.EVERYDAY_AND_RETAIL, icon: 'mdi:basket-outline' },
 ];
 
 // Automatically normalizes legacy category strings ("General", "Pantry & Snacks", "Beverages", etc.)
@@ -139,7 +139,7 @@ export const getCategoryIcon = (category?: string): string => {
     case CATEGORY_NAMES.NUTS_AND_SEEDS: return 'mdi:peanut-outline';
     case CATEGORY_NAMES.BABY: return 'mdi:baby-face-outline'; 
     case CATEGORY_NAMES.PANTRY: return 'mdi:cupboard-outline';
-    case CATEGORY_NAMES.EVERYDAY_AND_RETAIL: return 'mdi:shopping-outline';
+    case CATEGORY_NAMES.EVERYDAY_AND_RETAIL: return 'mdi:basket-outline';
     default: return 'mdi:cupboard-outline';
   }
 };
@@ -351,7 +351,7 @@ export const getItemIcon = (name: string, category?: string): string => {
   // 11. CATEGORY-AWARE DEFAULT FALLBACK
   // ==========================================
   if (normalizeCategoryName(category) === CATEGORY_NAMES.EVERYDAY_AND_RETAIL) {
-    return 'fluent-emoji-flat:shopping-bags';
+  return 'fluent-emoji-flat:shopping-cart';
   }
 
   // Whenever a kitchen item (like Soya granules, Dosa batter, Paapad) doesn't have a specific icon,

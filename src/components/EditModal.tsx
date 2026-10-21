@@ -115,7 +115,7 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
                   )}
                 </div>
                 <p className={`text-[11px] leading-tight font-medium ${trackHabit !== false ? 'text-[#2b5940]' : 'text-slate-400'}`}>
-                  Calculates cycles & restock reminders in Habits
+                  Calculates cycles & restock predictions in Habits
                 </p>
               </button>
 
