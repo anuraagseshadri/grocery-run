@@ -1,7 +1,5 @@
 // src/constants.ts
 
-// src/constants.ts
-
 export const STORE_OPTIONS = [
   { 
     name: 'Real Canadian Superstore', 
@@ -107,7 +105,7 @@ export const CATEGORIES = [
   { name: CATEGORY_NAMES.EVERYDAY_AND_RETAIL, icon: 'mdi:basket-outline' },
 ];
 
-// Automatically normalizes legacy category strings ("General", "Pantry & Snacks", "Beverages", etc.)
+// Automatically normalizes legacy category strings & handles "and" vs "&" variations
 export const normalizeCategoryName = (category?: string): string => {
   const raw = category?.trim();
   if (!raw || raw === 'General' || raw === 'Unknown' || raw === 'Pantry & Snacks') {
@@ -115,11 +113,19 @@ export const normalizeCategoryName = (category?: string): string => {
   }
   if (raw === 'Beverages') return CATEGORY_NAMES.DRINKS_AND_BEVERAGES;
   if (raw === 'Nuts & Spices') return CATEGORY_NAMES.NUTS_AND_SEEDS;
-  if (raw === 'Other' || raw === 'Retail' || raw === 'Hardware') return CATEGORY_NAMES.EVERYDAY_AND_RETAIL;
+  if (
+    raw === 'Everyday & Retail' || 
+    raw === 'Everyday and Retail' || 
+    raw === 'Retail' || 
+    raw === 'Hardware' || 
+    raw === 'Other'
+  ) {
+    return CATEGORY_NAMES.EVERYDAY_AND_RETAIL;
+  }
   return raw;
 };
 
-// Uses Iconify vector icons so every category (including Pantry's kitchen shelf) renders a crisp icon
+// Uses Iconify vector icons so every category renders a crisp icon
 export const getCategoryIcon = (category?: string): string => {
   const cleanCat = normalizeCategoryName(category);
   switch (cleanCat) {
@@ -140,7 +146,7 @@ export const getCategoryIcon = (category?: string): string => {
     case CATEGORY_NAMES.BABY: return 'mdi:baby-face-outline'; 
     case CATEGORY_NAMES.PANTRY: return 'mdi:cupboard-outline';
     case CATEGORY_NAMES.EVERYDAY_AND_RETAIL: return 'mdi:basket-outline';
-    default: return 'mdi:cupboard-outline';
+    default: return 'mdi:tag-outline';
   }
 };
 
@@ -351,10 +357,9 @@ export const getItemIcon = (name: string, category?: string): string => {
   // 11. CATEGORY-AWARE DEFAULT FALLBACK
   // ==========================================
   if (normalizeCategoryName(category) === CATEGORY_NAMES.EVERYDAY_AND_RETAIL) {
-  return 'fluent-emoji-flat:shopping-cart';
+    return 'fluent-emoji-flat:shopping-cart';
   }
 
-  // Whenever a kitchen item (like Soya granules, Dosa batter, Paapad) doesn't have a specific icon,
-  // it uses the Mason Jar instead of the category icon!
+  // Whenever a kitchen item doesn't have a specific icon, use the Mason Jar
   return 'fluent-emoji-flat:jar';
 };
