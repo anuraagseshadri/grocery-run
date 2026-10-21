@@ -88,19 +88,19 @@ export const CATEGORY_NAMES = {
 export const CATEGORIES = [
   { name: CATEGORY_NAMES.PRODUCE, icon: 'mdi:leaf' },
   { name: CATEGORY_NAMES.BAKERY, icon: 'mdi:bread-slice' },
-  { name: CATEGORY_NAMES.MEAT_AND_SEAFOOD, icon: 'mdi:food-drumstick' },
-  { name: CATEGORY_NAMES.DAIRY_AND_EGGS, icon: 'mdi:egg-outline' },
+  { name: CATEGORY_NAMES.MEAT_AND_SEAFOOD, icon: 'mdi:food-drumstick-outline' },
+  { name: CATEGORY_NAMES.DAIRY_AND_EGGS, icon: 'mdi:water-outline' },
   { name: CATEGORY_NAMES.RICE_AND_WHEAT, icon: 'mdi:barley' },
   { name: CATEGORY_NAMES.PASTA_AND_NOODLES, icon: 'mdi:noodles' },
-  { name: CATEGORY_NAMES.BREAKFAST_AND_CEREAL, icon: 'mdi:bowl' },
-  { name: CATEGORY_NAMES.COOKING_ESSENTIALS, icon: 'mdi:shaker' },
+  { name: CATEGORY_NAMES.BREAKFAST_AND_CEREAL, icon: 'mdi:bowl-mix-outline' },
+  { name: CATEGORY_NAMES.COOKING_ESSENTIALS, icon: 'mdi:shaker-outline' },
   { name: CATEGORY_NAMES.NUTS_AND_SEEDS, icon: 'mdi:peanut-outline' },
-  { name: CATEGORY_NAMES.DESSERT_AND_SNACKS, icon: 'mdi:cookie' },
+  { name: CATEGORY_NAMES.DESSERT_AND_SNACKS, icon: 'mdi:cookie-outline' },
   { name: CATEGORY_NAMES.DRINKS_AND_BEVERAGES, icon: 'mdi:cup-water' }, 
   { name: CATEGORY_NAMES.FROZEN, icon: 'mdi:snowflake' },
   { name: CATEGORY_NAMES.HOUSEHOLD_AND_CLEANING, icon: 'mdi:broom' },
-  { name: CATEGORY_NAMES.PHARMACY_AND_PERSONAL_CARE, icon: 'mdi:pill' },
-  { name: CATEGORY_NAMES.BABY, icon: 'mdi:baby-carriage' },
+  { name: CATEGORY_NAMES.PHARMACY_AND_PERSONAL_CARE, icon: 'mdi:medical-bag' },
+  { name: CATEGORY_NAMES.BABY, icon: 'mdi:baby-face-outline' },
   { name: CATEGORY_NAMES.PANTRY, icon: 'mdi:cupboard-outline' },
   { name: CATEGORY_NAMES.EVERYDAY_AND_RETAIL, icon: 'mdi:basket-outline' },
 ];
@@ -132,7 +132,7 @@ export const getCategoryIcon = (category?: string): string => {
     case CATEGORY_NAMES.PRODUCE: return 'mdi:leaf';
     case CATEGORY_NAMES.DAIRY_AND_EGGS: return 'mdi:water-outline';
     case CATEGORY_NAMES.MEAT_AND_SEAFOOD: return 'mdi:food-drumstick-outline';
-    case CATEGORY_NAMES.BAKERY: return 'mdi:croissant';
+    case CATEGORY_NAMES.BAKERY: return 'mdi:bread-slice';
     case CATEGORY_NAMES.FROZEN: return 'mdi:snowflake';
     case CATEGORY_NAMES.DRINKS_AND_BEVERAGES: return 'mdi:cup-water';
     case CATEGORY_NAMES.HOUSEHOLD_AND_CLEANING: return 'mdi:broom';
