@@ -1,44 +1,54 @@
+// src/constants.ts
+
+// src/constants.ts
+
 export const STORE_OPTIONS = [
   { 
     name: 'Real Canadian Superstore', 
     color: 'bg-blue-50 border-blue-200 text-blue-800', 
     logo: 'Superstore', 
-    imageLogo: '/logos/superstore.svg' 
+    imageLogo: '/logos/superstore.svg',
+    logoClass: 'h-6 sm:h-7 max-w-[130px]' // Wide wordmark
   },
   { 
     name: 'Costco', 
     color: 'bg-red-50 border-red-200 text-red-800', 
     logo: 'COSTCO', 
-    imageLogo: '/logos/costco.svg' 
+    imageLogo: '/logos/costco.svg',
+    logoClass: 'h-6 sm:h-7 max-w-[100px]' // Compact emblem
   },
   { 
     name: 'Walmart', 
     color: 'bg-sky-50 border-sky-200 text-sky-800', 
     logo: 'Walmart', 
-    imageLogo: '/logos/walmart.svg' 
+    imageLogo: '/logos/walmart.svg',
+    logoClass: 'h-5 sm:h-6 max-w-[110px]' // Very wide wordmark
   },
   { 
     name: 'No Frills', 
     color: 'bg-yellow-50 border-yellow-300 text-yellow-900', 
     logo: 'no frills', 
-    imageLogo: '/logos/nofrills.svg' 
+    imageLogo: '/logos/nofrills.svg',
+    logoClass: 'h-6 sm:h-7 max-w-[120px]' // Wide wordmark
   },
   { 
     name: 'FreshCo', 
     color: 'bg-emerald-50 border-emerald-300 text-emerald-900', 
     logo: 'FreshCo.', 
-    imageLogo: '/logos/freshco.svg' 
+    imageLogo: '/logos/freshco.svg',
+    logoClass: 'h-6 sm:h-7 max-w-[110px]' // Standard wordmark
   },
   { 
     name: 'Shoppers Drug Mart', 
     color: 'bg-rose-50 border-rose-200 text-rose-800', 
     logo: 'SHOPPERS', 
-    imageLogo: '/logos/sdm.svg' 
+    imageLogo: '/logos/sdm.svg',
+    logoClass: 'h-7 sm:h-8 max-w-[140px]' // Compact wordmark / slightly taller optical weight
   },
   { 
     name: "Farmers' Market", 
     color: 'bg-amber-100/80 border-amber-300 text-amber-950 shadow-sm', 
-    logo: "🌾 FARMERS' MARKET" 
+    logo: " FARMERS' MARKET" 
   },
   { 
     name: 'Asian Grocery', 
@@ -73,7 +83,8 @@ export const CATEGORY_NAMES = {
   HOUSEHOLD_AND_CLEANING: 'Household & Cleaning',
   PHARMACY_AND_PERSONAL_CARE: 'Pharmacy & Personal Care',
   BABY: 'Baby',
-  PANTRY: 'Pantry'
+  PANTRY: 'Pantry',
+  EVERYDAY_AND_RETAIL: 'Everyday & Retail'
 } as const;
 
 export const CATEGORIES = [
@@ -92,7 +103,8 @@ export const CATEGORIES = [
   { name: CATEGORY_NAMES.HOUSEHOLD_AND_CLEANING, icon: 'mdi:broom' },
   { name: CATEGORY_NAMES.PHARMACY_AND_PERSONAL_CARE, icon: 'mdi:pill' },
   { name: CATEGORY_NAMES.BABY, icon: 'mdi:baby-carriage' },
-  { name: CATEGORY_NAMES.PANTRY, icon: 'mdi:cupboard-outline' }
+  { name: CATEGORY_NAMES.PANTRY, icon: 'mdi:cupboard-outline' },
+  { name: CATEGORY_NAMES.EVERYDAY_AND_RETAIL, icon: 'mdi:shopping-outline' }
 ];
 
 // Automatically normalizes legacy category strings ("General", "Pantry & Snacks", "Beverages", etc.)
@@ -103,6 +115,7 @@ export const normalizeCategoryName = (category?: string): string => {
   }
   if (raw === 'Beverages') return CATEGORY_NAMES.DRINKS_AND_BEVERAGES;
   if (raw === 'Nuts & Spices') return CATEGORY_NAMES.NUTS_AND_SEEDS;
+  if (raw === 'Other' || raw === 'Retail' || raw === 'Hardware') return CATEGORY_NAMES.EVERYDAY_AND_RETAIL;
   return raw;
 };
 
@@ -126,6 +139,7 @@ export const getCategoryIcon = (category?: string): string => {
     case CATEGORY_NAMES.NUTS_AND_SEEDS: return 'mdi:peanut-outline';
     case CATEGORY_NAMES.BABY: return 'mdi:baby-face-outline'; 
     case CATEGORY_NAMES.PANTRY: return 'mdi:cupboard-outline';
+    case CATEGORY_NAMES.EVERYDAY_AND_RETAIL: return 'mdi:shopping-outline';
     default: return 'mdi:cupboard-outline';
   }
 };
@@ -150,6 +164,7 @@ export const getCategoryBgColor = (category?: string) => {
     case CATEGORY_NAMES.PHARMACY_AND_PERSONAL_CARE: return 'bg-purple-100 border-purple-200 text-purple-800'; 
     case CATEGORY_NAMES.FROZEN: return 'bg-blue-100 border-blue-200 text-blue-800'; 
     case CATEGORY_NAMES.PANTRY: return 'bg-stone-100 border-stone-300 text-stone-700';
+    case CATEGORY_NAMES.EVERYDAY_AND_RETAIL: return 'bg-zinc-100 border-zinc-300 text-zinc-800';
     default: return 'bg-stone-100 border-stone-300 text-stone-700';
   }
 };
@@ -157,7 +172,7 @@ export const getCategoryBgColor = (category?: string) => {
 // Helper to match whole words (prevents "nut" from matching inside "coconut", "donut", or "butternut")
 const hasWord = (text: string, word: string) => new RegExp(`\\b${word}s?\\b`, 'i').test(text);
 
-export const getItemIcon = (name: string, _category?: string): string => {
+export const getItemIcon = (name: string, category?: string): string => {
   const n = name.toLowerCase().trim();
 
   // ==========================================
@@ -178,6 +193,8 @@ export const getItemIcon = (name: string, _category?: string): string => {
   if (n.includes('soy sauce') || n.includes('soya sauce')) return 'fluent-emoji-flat:sake';
   if (n.includes('baking powder') || n.includes('baking soda')) return 'fluent-emoji-flat:salt';
   if (n.includes('paneer') || n.includes('cottage cheese')) return 'fluent-emoji-flat:cheese-wedge';
+  if (n.includes('motor oil') || n.includes('engine oil') || n.includes('wiper')) return 'fluent-emoji-flat:oil-drum';
+  if (n.includes('paper towel') || n.includes('toilet paper')) return 'fluent-emoji-flat:roll-of-paper';
 
   // ==========================================
   // 2. PRODUCE (FRUITS, VEGETABLES & HERBS)
@@ -299,7 +316,29 @@ export const getItemIcon = (name: string, _category?: string): string => {
   if (n.includes('water') || n.includes('soda') || n.includes('beer') || n.includes('wine') || n.includes('beverage') || n.includes('drink')) return 'fluent-emoji-flat:cup-with-straw';
 
   // ==========================================
-  // 9. HOUSEHOLD, PHARMACY, BABY & FROZEN
+  // 9. EVERYDAY & RETAIL (HARDWARE, ELECTRONICS, APPAREL)
+  // ==========================================
+  if (n.includes('hammer') || n.includes('mallet')) return 'fluent-emoji-flat:hammer';
+  if (n.includes('wrench') || n.includes('spanner') || n.includes('pliers') || n.includes('tool')) return 'fluent-emoji-flat:wrench';
+  if (n.includes('screwdriver') || n.includes('screw') || n.includes('nail') || n.includes('bolt') || n.includes('drill')) return 'fluent-emoji-flat:screwdriver';
+  if (n.includes('bulb') || n.includes('light') || n.includes('lamp') || n.includes('flashlight')) return 'fluent-emoji-flat:light-bulb';
+  if (n.includes('batter')) return 'fluent-emoji-flat:battery';
+  if (n.includes('paint') || n.includes('roller') || n.includes('brush')) return 'fluent-emoji-flat:paintbrush';
+  if (n.includes('charger') || n.includes('cable') || n.includes('cord') || n.includes('usb') || n.includes('adapter') || n.includes('plug')) return 'fluent-emoji-flat:electric-plug';
+  if (n.includes('headphone') || n.includes('earbud')) return 'fluent-emoji-flat:headphone';
+  if (n.includes('sock')) return 'fluent-emoji-flat:socks';
+  if (n.includes('shirt') || n.includes('t-shirt') || n.includes('tee') || n.includes('top') || n.includes('jacket') || n.includes('coat') || n.includes('hoodie')) return 'fluent-emoji-flat:t-shirt';
+  if (n.includes('pant') || n.includes('jean') || n.includes('trouser') || n.includes('short')) return 'fluent-emoji-flat:jeans';
+  if (n.includes('shoe') || n.includes('sneaker') || n.includes('boot') || n.includes('slipper') || n.includes('sandal')) return 'fluent-emoji-flat:running-shoe';
+  if (n.includes('umbrella')) return 'fluent-emoji-flat:umbrella';
+  if (n.includes('backpack') || n.includes('bag') || n.includes('luggage')) return 'fluent-emoji-flat:backpack';
+  if (n.includes('candle')) return 'fluent-emoji-flat:candle';
+  if (n.includes('book') || n.includes('notebook') || n.includes('journal')) return 'fluent-emoji-flat:notebook';
+  if (hasWord(n, 'pen') || n.includes('pencil') || n.includes('marker')) return 'fluent-emoji-flat:pen';
+  if (n.includes('box') || n.includes('bin') || n.includes('tote') || n.includes('organizer') || n.includes('storage')) return 'fluent-emoji-flat:package';
+
+  // ==========================================
+  // 10. HOUSEHOLD, PHARMACY, BABY & FROZEN
   // ==========================================
   if (n.includes('soap') || n.includes('shampoo') || n.includes('body wash') || n.includes('lotion')) return 'fluent-emoji-flat:soap';
   if (n.includes('paper') || n.includes('tissue') || n.includes('towel') || n.includes('napkin')) return 'fluent-emoji-flat:roll-of-paper';
@@ -309,9 +348,13 @@ export const getItemIcon = (name: string, _category?: string): string => {
   if (n.includes('breakfast')) return 'fluent-emoji-flat:shallow-pan-of-food';
 
   // ==========================================
-  // 10. MASON JAR DEFAULT FALLBACK
-  // Whenever an item (like Soya granules, Dosa batter, Paapad) doesn't have a specific icon,
-  // it uses the Mason Jar instead of the category icon!
+  // 11. CATEGORY-AWARE DEFAULT FALLBACK
   // ==========================================
+  if (normalizeCategoryName(category) === CATEGORY_NAMES.EVERYDAY_AND_RETAIL) {
+    return 'fluent-emoji-flat:shopping-bags';
+  }
+
+  // Whenever a kitchen item (like Soya granules, Dosa batter, Paapad) doesn't have a specific icon,
+  // it uses the Mason Jar instead of the category icon!
   return 'fluent-emoji-flat:jar';
 };
