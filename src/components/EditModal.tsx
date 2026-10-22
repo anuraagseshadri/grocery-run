@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { GroceryItem } from '../app/types';
-import { CATEGORIES, normalizeCategoryName, getCategoryIcon } from '../constants';
+import { CATEGORIES, normalizeCategoryName, getCategoryIcon, getCategoryBgColor } from '../constants';
 import { Icon } from '@iconify/react';
 
 interface EditModalProps {
@@ -19,7 +19,6 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
   const [store, setStore] = useState(item.store || 'Other');
   const [trackHabit, setTrackHabit] = useState<boolean>(item.trackHabit !== false);
 
-  // Single-select with toggle-off back to 'Other'
   const handleSelectStore = (selectedStore: string) => {
     setStore(prev => (prev === selectedStore ? 'Other' : selectedStore));
   };
@@ -44,7 +43,7 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
         onClick={(e) => e.stopPropagation()} 
       >
         {/* Modal Header */}
-        <div className="flex justify-between items-center px-6 pt-6 pb-3 shrink-0">
+        <div className="flex justify-between items-center px-6 pt-6 pb-3 shrink-0 bg-white z-10">
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Edit Item</h2>
           <button 
             type="button"
@@ -57,7 +56,7 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
         </div>
 
         {/* Scrollable Body */}
-        <div className="flex flex-col gap-6 px-6 py-2 overflow-y-auto">
+        <div className="flex flex-col gap-6 px-6 py-2 overflow-y-auto flex-1">
           {/* Item Name Input */}
           <div className="flex flex-col gap-1.5 shrink-0">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Item Name</label>
@@ -68,7 +67,7 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
             />
           </div>
 
-          {/* Tracking Mode Selector (2 Segmented Cards) */}
+          {/* Tracking Mode Selector */}
           <div className="grid grid-cols-2 gap-3 shrink-0">
             <button 
               type="button"
@@ -119,7 +118,7 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
             </button>
           </div>
 
-          {/* Store Selector Logo Pill Grid (10 Standardized Stores) */}
+          {/* Store Selector Logo Pill Grid */}
           <div className="flex flex-col gap-2.5 shrink-0">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">STORE</label>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 items-center w-full">
@@ -234,7 +233,7 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
               >
                 <svg className="h-4.5 w-auto max-w-[115px]" fill="none" viewBox="0 0 243 54">
                   <path d="M230.167,39.354c-9.037,9.035-21.89,10.837-28.709,4.017c-6.818-6.816-5.02-19.675,4.019-28.713 c9.037-9.04,21.896-10.838,28.71-4.02C241.007,17.456,239.208,30.314,230.167,39.354" fill="#63B5E6" />
-                  <path d="M226.535,42.465h-18.202c-0.791,0-1.491-0.508-1.736-1.262c-0.241-0.751,0.021-1.574,0.658-2.043 l5.589-4.069c1.162-0.846,2.899-0.056,2.899,1.475c0,0.566-0.258,1.119-0.748,1.479c0,0-0.73,0.532-1.056,0.767 c3.766,0,6.44,0,10.109,0c-5.347-4.101-16.183-12.421-16.183-12.421c-0.405-0.315-0.715-0.788-0.715-1.517 c0-0.938,0.851-1.758,1.745-1.758h20.479c0.981,0,1.791,0.836,1.791,1.823c0,0.656-0.339,1.13-0.671,1.407l-5.362,4.463 c-0.776,0.647-1.925,0.54-2.574-0.237c-0.284-0.337-0.421-0.753-0.421-1.162c0-0.526,0.225-1.045,0.657-1.407 c0,0,0.892-0.742,1.484-1.234c-3.707,0-6.063,0-9.926,0c4.842,3.716,14.368,10.974,16.095,12.301 C229.824,39.827,227.47,41.95,226.535,42.465 M208.977,17.839h20.362c1.009,0,1.826,0.816,1.826,1.829 c0,1.007-0.817,1.821-1.826,1.821h-20.362c-1.009,0-1.826-0.814-1.826-1.821C207.151,18.655,207.968,17.839,208.977,17.839z" fill="#FFFFFF" />
+                  <path d="M226.535,42.465h-18.202c-0.791,0-1.491-0.508-1.736-1.262c-0.241-0.751,0.021-1.574,0.658-2.043 l5.589-4.069c1.162-0.846,2.899-0.056,2.899,1.475c0,0.566-0.258,1.119-0.748,1.479c0,0-0.73,0.532-1.056,0.767 c3.766,0,6.44,0,10.109,0c-5.347-4.101-16.183-12.421-16.183-12.421c-0.405-0.315-0.715-0.788-0.715-1.517 c0-0.938,0.851-1.758,1.745-1.758h20.479c0.981,0,1.791,0.836,1.791,1.823c0,0.656-0.339,1.13-0.671,1.407l-5.362,4.463 c-0.776,0.647-1.925,0.54-2.574-0.237c-0.284-0.337-0.421-0.753-0.421-1.162c0-0.526,0.225-1.045,0.657-1.407 c0,0,0.892-0.742,1.484-1.234-3.707,0-6.063,0-9.926,0c4.842,3.716,14.368,10.974,16.095,12.301 C229.824,39.827,227.47,41.95,226.535,42.465 M208.977,17.839h20.362c1.009,0,1.826,0.816,1.826,1.829 c0,1.007-0.817,1.821-1.826,1.821h-20.362c-1.009,0-1.826-0.814-1.826-1.821C207.151,18.655,207.968,17.839,208.977,17.839z" fill="#FFFFFF" />
                   <path d="M78.359,32.669h4.117c1.573,0.012,3.956,0.039,5.602,1.151c1.337,0.913,1.85,2.287,1.85,3.657 c0,0.843-0.167,1.472-0.329,1.885c-1.192,3.024-4.798,3.076-6.151,3.093h-5.088 M81.616,34.733v5.754h0.993 c1.717-0.028,4.097-0.099,4.097-2.912c0-0.68-0.091-1.358-0.678-1.97c-0.882-0.888-2.125-0.872-3.112-0.872H81.616z" fill="#D62025" />
                   <path d="M91.75,32.674h6.371c3.374,0,4.7,1.47,4.7,3.126c0,1.969-1.774,2.503-2.651,2.753l2.982,3.908h-3.57 l-2.562-3.489h-2.032v3.489H91.75 M94.988,34.502v2.65h2.671c0.459-0.017,1.942-0.041,1.942-1.345c0-1.249-1.19-1.289-1.866-1.306 H94.988z" fill="#D62025" />
                   <path d="M164.962,32.674h6.372c3.373,0,4.702,1.47,4.702,3.126c0,1.969-1.773,2.503-2.654,2.753l2.982,3.908h-3.569 l-2.562-3.489h-2.032v3.489h-3.239 M168.202,34.502v2.65h2.675c0.454-0.017,1.94-0.041,1.94-1.345c0-1.249-1.192-1.289-1.867-1.306 H168.202z" fill="#D62025" />
@@ -293,9 +292,23 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
                 style={{ background: 'linear-gradient(90deg, #F8A566 0%, #FFFFFF 48%, #41AA52 100%)' }}
                 className={`w-full h-12 px-2.5 py-1.5 rounded-full border border-slate-300 shadow-xs active:scale-95 transition-all flex items-center justify-center gap-1.5 ${getActiveRingClass('Indian Grocery')}`}
               >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" fill="none" r="9" stroke="#000080" strokeWidth="2.5" />
-                  <circle cx="12" cy="12" fill="#000080" r="3.5" />
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="12" cy="12" fill="none" r="9" stroke="#000080" strokeWidth="1.8" />
+                  <circle cx="12" cy="12" fill="#000080" r="1.5" />
+                  <g stroke="#000080" strokeWidth="1">
+                    <line x1="12" y1="3" x2="12" y2="21" />
+                    <line x1="3" y1="12" x2="21" y2="12" />
+                    <line x1="5.64" y1="5.64" x2="18.36" y2="18.36" />
+                    <line x1="5.64" y1="18.36" x2="18.36" y2="5.64" />
+                    <line x1="7.5" y1="4.02" x2="16.5" y2="19.98" />
+                    <line x1="4.02" y1="7.5" x2="19.98" y2="16.5" />
+                    <line x1="7.5" y1="19.98" x2="16.5" y2="4.02" />
+                    <line x1="4.02" y1="16.5" x2="19.98" y2="7.5" />
+                    <line x1="9.48" y1="3.25" x2="14.52" y2="20.75" />
+                    <line x1="3.25" y1="9.48" x2="20.75" y2="14.52" />
+                    <line x1="9.48" y1="20.75" x2="14.52" y2="3.25" />
+                    <line x1="3.25" y1="14.52" x2="20.75" y2="9.48" />
+                  </g>
                 </svg>
                 <span className="font-bold tracking-tight text-[#0E1B38] text-[11px] leading-tight text-center">
                   Indian Grocery
@@ -324,29 +337,33 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
           <div className="flex flex-col gap-2 shrink-0 pt-1">
             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">CATEGORY</label>
             <div className="grid grid-cols-3 gap-2">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={`cat-${c.name}`}
-                  type="button"
-                  onClick={() => setCategory(c.name)}
-                  className={`p-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all ${
-                    category === c.name 
-                      ? 'border-[#b8d0c0] bg-[#d3e3d8] text-[#174525] shadow-xs' 
-                      : 'border-slate-100 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:border-slate-200'
-                  }`}
-                >
-                  <Icon icon={getCategoryIcon(c.name)} className="text-2xl drop-shadow-xs" />
-                  <span className="text-[11px] font-bold tracking-wide text-center leading-tight">
-                    {c.name}
-                  </span>
-                </button>
-              ))}
+              {CATEGORIES.map((c) => {
+                const isSelected = category === c.name;
+                const colorClass = getCategoryBgColor(c.name);
+                return (
+                  <button
+                    key={`cat-${c.name}`}
+                    type="button"
+                    onClick={() => setCategory(c.name)}
+                    className={`p-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all ${
+                      isSelected 
+                        ? 'border-[#059669] ring-2 ring-[#059669]/30 shadow-xs ' + colorClass 
+                        : 'border-slate-100 opacity-85 hover:opacity-100 hover:border-slate-200 ' + colorClass
+                    }`}
+                  >
+                    <Icon icon={getCategoryIcon(c.name)} className="text-2xl drop-shadow-xs" />
+                    <span className="text-[11px] font-bold tracking-wide text-center leading-tight">
+                      {c.name}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex justify-between items-center px-6 py-4 mt-2 border-t border-slate-100 bg-white shrink-0">
+        {/* Sticky Footer Actions */}
+        <div className="sticky bottom-0 z-20 bg-white/95 backdrop-blur-md flex justify-between items-center px-6 py-4 border-t border-slate-100 shrink-0 shadow-lg">
           <button 
             type="button"
             onClick={() => {
@@ -356,7 +373,7 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
             className="text-sm font-semibold text-[#E05656] hover:opacity-80 px-2 py-2 transition-opacity shrink-0"
             title="Reset saved store and category preferences for this item"
           >
-            Reset Tag
+            Reset Category
           </button>
           
           <div className="flex items-center gap-3">
