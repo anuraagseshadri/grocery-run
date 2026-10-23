@@ -29,13 +29,13 @@ export const STORE_OPTIONS = [
     imageLogo: '/logos/nofrills.svg',
     logoClass: 'h-6 sm:h-7 max-w-[120px]' // Wide wordmark
   },
-  { 
-    name: 'FreshCo', 
-    color: 'bg-emerald-50 border-emerald-300 text-emerald-900', 
-    logo: 'FreshCo.', 
-    imageLogo: '/logos/freshco.svg',
-    logoClass: 'h-6 sm:h-7 max-w-[110px]' // Standard wordmark
-  },
+{
+  name: 'FreshCo',
+  logo: 'FreshCo',
+  logoClass: 'h-8 sm:h-10 max-w-[170px]',
+  imageLogo: '/logos/freshco.svg',
+  color: 'bg-[#bfd730]/20 border-[#bfd730] text-slate-800'
+},
   { 
     name: 'Shoppers Drug Mart', 
     color: 'bg-rose-50 border-rose-200 text-rose-800', 
@@ -169,7 +169,7 @@ export const getCategoryBgColor = (category?: string) => {
     case CATEGORY_NAMES.HOUSEHOLD_AND_CLEANING: return 'bg-slate-200 border-slate-300 text-slate-700';
     case CATEGORY_NAMES.PHARMACY_AND_PERSONAL_CARE: return 'bg-purple-100 border-purple-200 text-purple-800'; 
     case CATEGORY_NAMES.FROZEN: return 'bg-blue-100 border-blue-200 text-blue-800'; 
-    case CATEGORY_NAMES.PANTRY: return 'bg-stone-100 border-stone-300 text-stone-700';
+    case CATEGORY_NAMES.PANTRY: return 'bg-amber-100/70 border-amber-300 text-amber-900';
     case CATEGORY_NAMES.EVERYDAY_AND_RETAIL: return 'bg-zinc-100 border-zinc-300 text-zinc-800';
     default: return 'bg-stone-100 border-stone-300 text-stone-700';
   }

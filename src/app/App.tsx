@@ -1083,25 +1083,35 @@ export default function App() {
 									const officialStore = STORE_OPTIONS.find(s => s.name.toLowerCase() === storeName.toLowerCase());
 									
 									const storeHeader = officialStore?.imageLogo ? (
-										<div className={`flex items-center px-4 py-3.5 rounded-xl border shadow-sm ${officialStore.color || 'bg-white border-slate-200'}`}>
-											<img 
-												src={officialStore.imageLogo}
-												alt={storeName} 
-												className="h-7 sm:h-8 max-w-[140px] sm:max-w-[160px] object-contain object-left" 
-												onError={(e) => { e.currentTarget.style.display = 'none'; }}
-											/>
-											<div className="ml-auto bg-white/85 text-slate-900 px-2.5 py-1 rounded-md shadow-sm border border-slate-200/60 flex items-center justify-center backdrop-blur-sm">
-												<span className="text-xs font-bold">{itemsInStore.length}</span>
-											</div>
-										</div>
-									) : (
-										<div className={`flex items-center px-4 py-3.5 rounded-xl border shadow-sm font-headline font-bold uppercase tracking-wider text-sm sm:text-base ${officialStore?.color || 'bg-white text-slate-600 border-slate-200'}`}>
-											<span>{officialStore?.logo || officialStore?.name || storeName || 'Other'}</span>
-											<div className="ml-auto bg-white/85 text-slate-900 px-2.5 py-1 rounded-md shadow-sm border border-slate-200/60 flex items-center justify-center backdrop-blur-sm">
-												<span className="text-xs font-bold">{itemsInStore.length}</span>
-											</div>
-										</div>
-									);
+    <div className={`flex items-center px-4 py-3.5 rounded-xl border shadow-sm ${officialStore.color || 'bg-white border-slate-200'}`}>
+        <img 
+            src={officialStore.imageLogo}
+            alt={storeName} 
+            className="h-7 sm:h-8 max-w-[140px] sm:max-w-[160px] object-contain object-left" 
+            onError={(e) => { 
+                // Fallback: hide broken image and show store name text instead
+                e.currentTarget.style.display = 'none';
+                const parent = e.currentTarget.parentElement;
+                if (parent && !parent.querySelector('.fallback-text')) {
+                    const span = document.createElement('span');
+                    span.className = 'font-headline font-bold uppercase tracking-wider text-sm sm:text-base text-slate-800 fallback-text';
+                    span.innerText = officialStore.logo || officialStore.name || storeName;
+                    parent.insertBefore(span, parent.firstChild);
+                }
+            }}
+        />
+        <div className="ml-auto bg-white/85 text-slate-900 px-2.5 py-1 rounded-md shadow-sm border border-slate-200/60 flex items-center justify-center backdrop-blur-sm">
+            <span className="text-xs font-bold">{itemsInStore.length}</span>
+        </div>
+    </div>
+) : (
+    <div className={`flex items-center px-4 py-3.5 rounded-xl border shadow-sm font-headline font-bold uppercase tracking-wider text-sm sm:text-base ${officialStore?.color || 'bg-white text-slate-600 border-slate-200'}`}>
+        <span>{officialStore?.logo || officialStore?.name || storeName || 'Other'}</span>
+        <div className="ml-auto bg-white/85 text-slate-900 px-2.5 py-1 rounded-md shadow-sm border border-slate-200/60 flex items-center justify-center backdrop-blur-sm">
+            <span className="text-xs font-bold">{itemsInStore.length}</span>
+        </div>
+    </div>
+);
 									
 									const sortedItems = [...itemsInStore].sort((a, b) => {
 										const orderA = categoryOrderMap[normalizeCategoryName(a.category)] ?? 99;
