@@ -44,18 +44,24 @@ export function ItemCard({
           
           {isListMode && (
             <button 
+              type="button"
               onClick={() => onToggleCart(id, inCart)}
+              aria-label={inCart ? `Mark ${name} as not in cart` : `Mark ${name} as in cart`}
+              title={inCart ? `Remove ${name} from cart` : `Move ${name} to cart`}
               className={`w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
                 inCart ? 'border-primary bg-primary' : 'border-slate-300 bg-white'
               }`}
             >
-              {inCart && <LuCheck className="text-white text-sm stroke-[3px]" />}
+              {inCart && <LuCheck className="text-white text-sm stroke-[3px]" aria-hidden="true" />}
             </button>
           )}
 
-          <div className={`text-2xl shrink-0 transition-all ${
-            isListMode && inCart ? 'grayscale opacity-50' : 'text-primary'
-          }`}>
+          <div 
+            className={`text-2xl shrink-0 transition-all ${
+              isListMode && inCart ? 'grayscale opacity-50' : 'text-primary'
+            }`}
+            aria-hidden="true"
+          >
             <Icon icon={getItemIcon(name, displayCategory)} />
           </div>
           
@@ -63,10 +69,12 @@ export function ItemCard({
           <div className="flex flex-col flex-1 min-w-0 justify-center">
             {isListMode && onEdit ? (
               <button 
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onEdit(id);
                 }}
+                aria-label={`Edit ${name}`}
                 className={`text-left font-headline font-semibold hover:text-primary transition-all break-words leading-tight ${
                   inCart ? 'line-through text-slate-400' : 'text-text-main'
                 }`}
@@ -84,12 +92,12 @@ export function ItemCard({
               <div className="mt-1">
                 {trackHabit !== false ? (
                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-[#DCEDE0] text-[#006d30] font-bold text-[9px] cursor-default">
-                    <span className="material-symbols-outlined text-[11px]">sync</span>
+                    <span className="material-symbols-outlined text-[11px]" aria-hidden="true">sync</span>
                     Tracked
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-[#FEF3C7] text-amber-800 font-bold text-[9px] cursor-default">
-                    <span className="material-symbols-outlined text-[11px]">bolt</span>
+                    <span className="material-symbols-outlined text-[11px]" aria-hidden="true">bolt</span>
                     1-Time
                   </span>
                 )}
@@ -103,28 +111,31 @@ export function ItemCard({
           <div className={`flex items-center gap-1 text-[10px] font-label font-semibold px-2 py-1 rounded-md border shrink-0 transition-all ${
              isListMode && inCart ? 'opacity-50 grayscale' : ''
           } ${getCategoryBgColor(displayCategory)}`}>
-            <Icon icon={getCategoryIcon(displayCategory)} className="text-[14px] shrink-0" />
+            <Icon icon={getCategoryIcon(displayCategory)} className="text-[14px] shrink-0" aria-hidden="true" />
             <span className="whitespace-nowrap">{displayCategory}</span>
           </div>
 
           {isListMode ? (
             <button 
+              type="button"
               onClick={() => onDelete(id)} 
               className={`p-2 hover:bg-red-50 rounded-full transition-colors shrink-0 ${
                 inCart ? 'text-red-300 hover:text-red-500' : 'text-red-400 hover:text-red-600'
               }`}
               title={`Delete ${name}`}
+              aria-label={`Delete ${name}`}
             >
-              <LuTrash2 className="text-xl" />
+              <LuTrash2 className="text-xl" aria-hidden="true" />
             </button>
           ) : (
             <button 
+              type="button"
               onClick={() => onToggleCart(id, inCart)} 
               className="p-2 text-primary hover:bg-primary/10 rounded-full transition-colors shrink-0"
               title={`Move ${name} back to list`}
               aria-label={`Return ${name} to list`}
             >
-              <LuUndo className="text-xl" />
+              <LuUndo className="text-xl" aria-hidden="true" />
             </button>
           )}
         </div>

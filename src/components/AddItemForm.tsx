@@ -43,11 +43,12 @@ export default function AddItemForm({ onAddItem, suggestions = [] }: AddItemForm
   return (
     <div className="relative w-full z-30" ref={dropdownRef}>
       <form onSubmit={handleSubmit} className="relative flex items-center w-full">
-        <div className="absolute left-4 text-slate-400 flex items-center justify-center">
+        <div className="absolute left-4 text-slate-400 flex items-center justify-center" aria-hidden="true">
           <span className="material-symbols-outlined">add_shopping_cart</span>
         </div>
         <input
           type="text"
+          aria-label="Add new grocery item"
           value={inputValue}
           onChange={(e) => {
             setInputValue(e.target.value);
@@ -60,9 +61,11 @@ export default function AddItemForm({ onAddItem, suggestions = [] }: AddItemForm
         {inputValue.trim() && (
           <button 
             type="submit" 
+            aria-label={`Add ${inputValue.trim()} to list`}
+            title={`Add ${inputValue.trim()}`}
             className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-primary text-white rounded-xl flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all shadow-sm"
           >
-            <span className="material-symbols-outlined text-xl">add</span>
+            <span className="material-symbols-outlined text-xl" aria-hidden="true">add</span>
           </button>
         )}
       </form>
@@ -76,7 +79,7 @@ export default function AddItemForm({ onAddItem, suggestions = [] }: AddItemForm
               onClick={() => handleSelectSuggestion(suggestion)}
               className="w-full text-left px-4 py-3.5 flex items-center gap-3 hover:bg-slate-50 active:bg-slate-100 transition-colors"
             >
-              <span className="material-symbols-outlined text-slate-300 text-[20px]">history</span>
+              <span className="material-symbols-outlined text-slate-300 text-[20px]" aria-hidden="true">history</span>
               <span className="text-slate-700 font-headline font-semibold text-sm">{suggestion}</span>
             </button>
           ))}
