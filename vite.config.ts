@@ -19,12 +19,12 @@ export default defineConfig({
         theme_color: '#ffffff',
         icons: [
           {
-            src: 'pwa-192x192.png',
+            src: 'android-192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'android-512.png',
             sizes: '512x512',
             type: 'image/png'
           }
@@ -32,4 +32,16 @@ export default defineConfig({
       }
     })
   ],
+  build: {
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/analytics'],
+          'icons-vendor': ['@iconify/react', 'react-icons/lu']
+        }
+      }
+    }
+  }
 })
