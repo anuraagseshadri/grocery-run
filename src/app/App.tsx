@@ -1139,10 +1139,15 @@ export default function App() {
 										</div>
 									);
 									
+									// Push checked (inCart: true) items to the bottom, then sort by category and alphabetically
 									const sortedItems = [...itemsInStore].sort((a, b) => {
+										if (a.inCart !== b.inCart) {
+											return Number(a.inCart) - Number(b.inCart);
+										}
 										const orderA = categoryOrderMap[normalizeCategoryName(a.category)] ?? 99;
 										const orderB = categoryOrderMap[normalizeCategoryName(b.category)] ?? 99;
-										return orderA - orderB;
+										if (orderA !== orderB) return orderA - orderB;
+										return a.name.localeCompare(b.name);
 									});
 
 									return (

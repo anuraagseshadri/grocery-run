@@ -29,13 +29,13 @@ export const STORE_OPTIONS = [
     imageLogo: '/logos/nofrills.svg',
     logoClass: 'h-6 sm:h-7 max-w-[120px]' // Wide wordmark
   },
-{
-  name: 'FreshCo',
-  logo: 'FreshCo',
-  logoClass: 'h-8 sm:h-10 max-w-[170px]',
-  imageLogo: '/logos/freshco.svg',
-  color: 'bg-[#bfd730]/20 border-[#bfd730] text-slate-800'
-},
+  {
+    name: 'FreshCo',
+    logo: 'FreshCo',
+    logoClass: 'h-8 sm:h-10 max-w-[170px]',
+    imageLogo: '/logos/freshco.svg',
+    color: 'bg-[#bfd730]/20 border-[#bfd730] text-slate-800'
+  },
   { 
     name: 'Shoppers Drug Mart', 
     color: 'bg-rose-50 border-rose-200 text-rose-800', 
@@ -354,12 +354,43 @@ export const getItemIcon = (name: string, category?: string): string => {
   if (n.includes('breakfast')) return 'fluent-emoji-flat:shallow-pan-of-food';
 
   // ==========================================
-  // 11. CATEGORY-AWARE DEFAULT FALLBACK
+  // 11. CATEGORY-AWARE DEFAULT FALLBACK (DISTINCT MDI ICONS)
   // ==========================================
-  if (normalizeCategoryName(category) === CATEGORY_NAMES.EVERYDAY_AND_RETAIL) {
-    return 'fluent-emoji-flat:shopping-cart';
+  switch (normalizeCategoryName(category)) {
+    case CATEGORY_NAMES.PRODUCE:
+      return 'mdi:carrot';
+    case CATEGORY_NAMES.BAKERY:
+      return 'mdi:baguette';
+    case CATEGORY_NAMES.MEAT_AND_SEAFOOD:
+      return 'mdi:food-steak';
+    case CATEGORY_NAMES.DAIRY_AND_EGGS:
+      return 'mdi:bottle-tonic-outline';
+    case CATEGORY_NAMES.RICE_AND_WHEAT:
+      return 'mdi:sack';
+    case CATEGORY_NAMES.PASTA_AND_NOODLES:
+      return 'mdi:pasta';
+    case CATEGORY_NAMES.BREAKFAST_AND_CEREAL:
+      return 'mdi:toaster-oven';
+    case CATEGORY_NAMES.COOKING_ESSENTIALS:
+      return 'mdi:bottle-wine-outline';
+    case CATEGORY_NAMES.NUTS_AND_SEEDS:
+      return 'mdi:seed-outline';
+    case CATEGORY_NAMES.DESSERT_AND_SNACKS:
+      return 'mdi:cupcake';
+    case CATEGORY_NAMES.DRINKS_AND_BEVERAGES:
+      return 'mdi:bottle-soda-classic-outline';
+    case CATEGORY_NAMES.FROZEN:
+      return 'mdi:ice-cream';
+    case CATEGORY_NAMES.HOUSEHOLD_AND_CLEANING:
+      return 'mdi:spray-bottle';
+    case CATEGORY_NAMES.PHARMACY_AND_PERSONAL_CARE:
+      return 'mdi:pill';
+    case CATEGORY_NAMES.BABY:
+      return 'mdi:baby-bottle-outline';
+    case CATEGORY_NAMES.EVERYDAY_AND_RETAIL:
+      return 'mdi:storefront-outline';
+    case CATEGORY_NAMES.PANTRY:
+    default:
+      return 'mdi:food-takeout-box-outline';
   }
-
-  // Whenever a kitchen item doesn't have a specific icon, use the Mason Jar
-  return 'fluent-emoji-flat:jar';
 };
