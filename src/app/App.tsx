@@ -381,7 +381,14 @@ export default function App() {
 		setHasDismissedReminder(false);
 		setExpandedCartStore(null);
 
-		const trackableHabitItems = cartItems.filter(item => item.trackHabit !== false);
+		const trackableHabitItems = cartItems
+			.filter(item => item.trackHabit !== false)
+			.map(item => ({
+				name: item.name,
+				category: normalizeCategoryName(item.category),
+				store: item.store || 'Other',
+				trackHabit: true
+			}));
 
 		if (trackableHabitItems.length > 0) {
 			addDoc(collection(db, 'purchaseHistory'), {
@@ -695,7 +702,12 @@ export default function App() {
 			if (record.history.length > 0) {
 				const sortedHistory = [...record.history].sort((a, b) => a.date - b.date);
 				const lastPurchase = sortedHistory[sortedHistory.length - 1];
-				lastPurchasedStore = preferences[itemNameKey]?.lastPurchasedStore || lastPurchase.store;
+				
+				// FIX: Read true historical store from order record first, fallback to preferences only if missing
+				lastPurchasedStore = (lastPurchase && lastPurchase.store && lastPurchase.store !== 'Unknown')
+					? lastPurchase.store
+					: (preferences[itemNameKey]?.lastPurchasedStore || 'Other');
+
 				daysSinceLast = (now - lastPurchase.date) / MS_PER_DAY;
 
 				const distinctEvents: { date: number; store: string }[] = [sortedHistory[0]];
@@ -1446,7 +1458,7 @@ export default function App() {
 											<option value="az">Alphabetical (A-Z)</option>
 										</select>
 										<span className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[10px]" aria-hidden="true">
-											▼
+											
 										</span>
 									</div>
 								</div>
