@@ -33,6 +33,16 @@ interface GroceryItem {
 type HabitStatus = 'Restock Soon' | 'In Stock' | 'Lapsed' | 'Need Data';
 
 const ITEM_SYNONYM_MAP: Record<string, string> = {
+	// Coffee & Tea
+	'coffee powder': 'coffee',
+	'filter coffee': 'coffee',
+	'instant coffee': 'coffee',
+	'ground coffee': 'coffee',
+	'coffee beans': 'coffee',
+	'tea powder': 'tea',
+	'tea leaves': 'tea',
+	'tea bags': 'tea',
+	'chai powder': 'tea',
 	// Dairy & Curd
 	'curd': 'yogurt',
 	'dahi': 'yogurt',
