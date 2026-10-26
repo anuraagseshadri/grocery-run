@@ -36,7 +36,6 @@ export function Layout({ children, activeTab, setActiveTab, userEmail, cartCount
         await deleteUser(auth.currentUser);
         toast.success("Account deleted successfully.");
       } catch (error: any) {
-        // Firebase requires recent authentication for permanent account deletion
         if (error.code === 'auth/requires-recent-login') {
           toast.error("Security check: Please sign out and sign back in to verify your identity before deleting your account.");
         } else {
@@ -63,6 +62,7 @@ export function Layout({ children, activeTab, setActiveTab, userEmail, cartCount
           {userEmail && (
             <div className="relative">
               <button
+                type="button"
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
                 aria-label="User menu"
@@ -82,6 +82,7 @@ export function Layout({ children, activeTab, setActiveTab, userEmail, cartCount
                     <p className="text-xs text-slate-500 mb-2 truncate px-2 pt-1">{userEmail}</p>
                     
                     <button 
+                      type="button"
                       onClick={() => {
                         handleSignOut();
                         setShowUserMenu(false);
@@ -95,6 +96,7 @@ export function Layout({ children, activeTab, setActiveTab, userEmail, cartCount
                     <div className="h-px w-full bg-slate-100 my-1"></div>
                     
                     <button 
+                      type="button"
                       onClick={() => {
                         handleDeleteAccount();
                         setShowUserMenu(false);
@@ -117,8 +119,11 @@ export function Layout({ children, activeTab, setActiveTab, userEmail, cartCount
         {children}
       </main>
 
-      {/* FOOTER NAV */}
-      <nav className="fixed bottom-0 w-full bg-white pb-safe pt-2 px-6 flex justify-around items-center z-50 border-t border-slate-100 shadow-[0_-4px_16px_rgba(0,0,0,0.02)]">
+      {/* FOOTER NAVIGATION */}
+      <nav 
+        aria-label="Main Navigation"
+        className="fixed bottom-0 left-0 right-0 z-50 h-[72px] bg-white border-t border-[#F1F5F9] shadow-[0_-4px_12px_rgba(0,0,0,0.03)] flex items-center justify-around px-4 pb-[max(8px,env(safe-area-inset-bottom))]"
+      >
         <NavButton 
           icon="list" 
           label="List" 
@@ -143,7 +148,7 @@ export function Layout({ children, activeTab, setActiveTab, userEmail, cartCount
   );
 }
 
-// Sub-component for the buttons
+// SPEC-COMPLIANT NAV BUTTON SUB-COMPONENT
 function NavButton({ 
   icon, 
   label, 
@@ -159,25 +164,39 @@ function NavButton({
 }) {
   return (
     <button 
+      type="button"
       onClick={onClick} 
-      aria-pressed={isActive} 
-      className={`relative flex flex-col items-center p-2 min-w-[64px] transition-colors ${isActive ? 'text-primary' : 'text-on-surface-variant'}`}
+      aria-label={`${label} tab`}
+      aria-current={isActive ? 'page' : undefined} 
+      className={`relative flex flex-col items-center justify-center w-[72px] h-[54px] rounded-2xl transition-all duration-200 select-none ${
+        isActive 
+          ? 'bg-[#DCFCE7] text-[#15803D] border border-emerald-600/15' 
+          : 'bg-transparent text-[#64748B] hover:text-slate-800 active:scale-95'
+      }`}
     >
       <div className="relative flex items-center justify-center">
         <span 
-          className="material-symbols-outlined" 
+          className="material-symbols-outlined text-[22px] leading-none" 
           aria-hidden="true" 
-          style={{ fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }}
+          style={{ 
+            fontVariationSettings: isActive ? "'FILL' 1, 'wght' 600" : "'FILL' 0, 'wght' 400" 
+          }}
         >
           {icon}
         </span>
         {badgeCount > 0 && (
-          <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 bg-emerald-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white shadow-sm">
+          <span className="absolute -top-1 -right-2.5 min-w-[17px] h-[17px] px-1 bg-[#15803D] text-white text-[10px] font-extrabold rounded-full flex items-center justify-center ring-2 ring-white shadow-xs">
             {badgeCount}
           </span>
         )}
       </div>
-      <span className="text-xs font-label mt-1">{label}</span>
+      <span 
+        className={`text-[11px] leading-[14px] mt-[3px] ${
+          isActive ? 'font-semibold text-[#15803D]' : 'font-medium text-[#64748B]'
+        }`}
+      >
+        {label}
+      </span>
     </button>
   );
 }
