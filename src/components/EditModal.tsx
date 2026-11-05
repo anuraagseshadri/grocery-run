@@ -103,7 +103,7 @@ export const EditModal: React.FC<EditModalProps> = ({ item, onClose, onSave, onF
               }`}
             >
               <div className="flex items-center justify-between w-full mb-1">
-                <span className="text-sm font-bold text-slate-900">One time</span>
+                <span className="text-sm font-bold text-slate-900">1-Time</span>
                 {trackHabit === false && (
                   <span className="w-4 h-4 rounded-full bg-emerald-700 text-white flex items-center justify-center">
                     <svg className="w-2.5 h-2.5 stroke-[3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">

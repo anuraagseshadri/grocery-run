@@ -10,9 +10,11 @@ interface LayoutProps {
   setActiveTab: (tab: string) => void;
   userEmail?: string | null;
   cartCount?: number;
+  trackSpend?: boolean; // NEW
+  onToggleTrackSpend?: () => void; // NEW
 }
 
-export function Layout({ children, activeTab, setActiveTab, userEmail, cartCount = 0 }: LayoutProps) {
+export function Layout({ children, activeTab, setActiveTab, userEmail, cartCount = 0, trackSpend = true, onToggleTrackSpend }: LayoutProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const handleSignOut = async () => {
@@ -81,6 +83,19 @@ export function Layout({ children, activeTab, setActiveTab, userEmail, cartCount
                   <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-50 flex flex-col">
                     <p className="text-xs text-slate-500 mb-2 truncate px-2 pt-1">{userEmail}</p>
                     
+                    {/* TRACK SPENDING TOGGLE */}
+                    <div className="flex items-center justify-between px-2 py-2.5 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors" onClick={() => { if(onToggleTrackSpend) onToggleTrackSpend(); }}>
+                      <span className="text-sm font-semibold text-slate-700 flex items-center gap-2.5">
+                        <span className="material-symbols-outlined text-[18px]">receipt_long</span>
+                        Track Spending
+                      </span>
+                      <div className={`w-8 h-5 rounded-full flex items-center p-0.5 transition-colors ${trackSpend ? 'bg-emerald-600' : 'bg-slate-300'}`}>
+                        <div className={`w-4 h-4 rounded-full bg-white shadow-xs transition-transform ${trackSpend ? 'translate-x-3' : 'translate-x-0'}`} />
+                      </div>
+                    </div>
+                    
+                    <div className="h-px w-full bg-slate-100 my-1"></div>
+                    
                     <button 
                       type="button"
                       onClick={() => {
@@ -119,10 +134,10 @@ export function Layout({ children, activeTab, setActiveTab, userEmail, cartCount
         {children}
       </main>
 
-      {/* FOOTER NAVIGATION */}
+      {/* FOOTER NAVIGATION (4-TAB LAYOUT) */}
       <nav 
         aria-label="Main Navigation"
-        className="fixed bottom-0 left-0 right-0 z-50 h-[72px] bg-white border-t border-[#F1F5F9] shadow-[0_-4px_12px_rgba(0,0,0,0.03)] flex items-center justify-around px-4 pb-[max(8px,env(safe-area-inset-bottom))]"
+        className="fixed bottom-0 left-0 right-0 z-50 h-[72px] bg-white border-t border-[#F1F5F9] shadow-[0_-4px_12px_rgba(0,0,0,0.03)] flex items-center justify-around px-2 pb-[max(8px,env(safe-area-inset-bottom))]"
       >
         <NavButton 
           icon="list" 
@@ -143,12 +158,18 @@ export function Layout({ children, activeTab, setActiveTab, userEmail, cartCount
           isActive={activeTab === 'habits'} 
           onClick={() => setActiveTab('habits')} 
         />
+        <NavButton 
+          icon={trackSpend ? "receipt_long" : "history"} 
+          label={trackSpend ? "Receipts" : "History"} 
+          isActive={activeTab === 'history'} 
+          onClick={() => setActiveTab('history')} 
+        />
       </nav>
     </div>
   );
 }
 
-// SPEC-COMPLIANT NAV BUTTON SUB-COMPONENT
+// SPEC-COMPLIANT NAV BUTTON SUB-COMPONENT (Updated to w-[68px])
 function NavButton({ 
   icon, 
   label, 
@@ -168,7 +189,7 @@ function NavButton({
       onClick={onClick} 
       aria-label={`${label} tab`}
       aria-current={isActive ? 'page' : undefined} 
-      className={`relative flex flex-col items-center justify-center w-[72px] h-[54px] rounded-2xl transition-all duration-200 select-none ${
+      className={`relative flex flex-col items-center justify-center w-[68px] h-[54px] rounded-2xl transition-all duration-200 select-none ${
         isActive 
           ? 'bg-[#DCFCE7] text-[#15803D] border border-emerald-600/15' 
           : 'bg-transparent text-[#64748B] hover:text-slate-800 active:scale-95'
@@ -191,7 +212,7 @@ function NavButton({
         )}
       </div>
       <span 
-        className={`text-[11px] leading-[14px] mt-[3px] ${
+        className={`text-[10.5px] leading-[14px] mt-[2px] ${
           isActive ? 'font-semibold text-[#15803D]' : 'font-medium text-[#64748B]'
         }`}
       >

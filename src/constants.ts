@@ -1,5 +1,24 @@
 // src/constants.ts
 
+export const getStoreShortCode = (storeName: string): string => {
+  const n = storeName.toLowerCase().trim();
+  if (n === 'real canadian superstore') return 'RC';
+  if (n === 'costco') return 'CO';
+  if (n === 'walmart') return 'WM';
+  if (n === 'no frills') return 'NF';
+  if (n === 'freshco') return 'FC';
+  if (n === 'shoppers drug mart') return 'SD';
+  if (n === "farmers' market") return 'FM';
+  if (n === 'asian grocery') return 'AG';
+  if (n === 'indian grocery') return 'IG';
+  
+  // Fallback: take first letter of first two words, or first two letters of one word
+  const words = n.replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  if (words.length === 1 && words[0].length >= 2) return words[0].substring(0, 2).toUpperCase();
+  return '??';
+};
+
 export const STORE_OPTIONS = [
   { 
     name: 'Real Canadian Superstore', 

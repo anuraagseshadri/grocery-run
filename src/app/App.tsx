@@ -4,10 +4,12 @@ import { Layout } from '../components/Layout';
 import { AddForm } from '../components/AddForm';
 import AddItemForm from '../components/AddItemForm';
 import { ItemCard } from '../components/ItemCard';
+import { CheckoutSpendModal } from '../components/CheckoutSpendModal';
+import { PurchaseHistoryView } from '../components/PurchaseHistoryView';
 import { EditModal } from '../components/EditModal';
 import { Toast } from '../components/Toast';
 import { autoTagItem } from '../tagger';
-import { STORE_OPTIONS, getItemIcon, CATEGORIES, getCategoryBgColor, getCategoryIcon, normalizeCategoryName } from '../constants';
+import { STORE_OPTIONS, getItemIcon, CATEGORIES, getCategoryBgColor, getCategoryIcon, normalizeCategoryName, getStoreShortCode } from '../constants';
 import { Icon } from '@iconify/react';
 import { db, auth, analytics } from '../firebase';
 import { Analytics } from '@vercel/analytics/react';
@@ -76,15 +78,12 @@ const ITEM_SYNONYM_MAP: Record<string, string> = {
 const normalizeItemName = (name: string) => {
 	let n = name.trim().toLowerCase().replace(/\s+/g, ' ');
 	
-	// 1. Check direct phrase alias first (e.g., "frozen veggies" -> "frozen vegetable")
 	if (ITEM_SYNONYM_MAP[n]) return ITEM_SYNONYM_MAP[n];
 
-	// 2. Standard singularization
 	if (n.endsWith('ies')) n = n.slice(0, -3) + 'y';
 	else if (n.endsWith('oes')) n = n.slice(0, -2);
 	else if (n.endsWith('s') && !n.endsWith('ss')) n = n.slice(0, -1);
 
-	// 3. Re-check alias after singularizing (e.g., "curds" -> "curd" -> "yogurt")
 	return ITEM_SYNONYM_MAP[n] || n;
 };
 
@@ -131,6 +130,19 @@ export default function App() {
 
 	const [expandedCartStore, setExpandedCartStore] = useState<string | null>(null);
 	const [nowTick, setNowTick] = useState(() => Date.now());
+
+	// Spend Tracking State
+	const [isSpendModalOpen, setIsSpendModalOpen] = useState(false);
+	const [trackSpend, setTrackSpend] = useState(() => {
+		return localStorage.getItem('groceryRun_trackSpend') !== 'false';
+	});
+
+	const handleToggleTrackSpend = () => {
+		const newVal = !trackSpend;
+		setTrackSpend(newVal);
+		localStorage.setItem('groceryRun_trackSpend', newVal.toString());
+		setToastMessage(newVal ? "Receipts mode active. Your spending is now tracked." : "Spend tracking off. Your runs are now saved in History.");
+	};
 
 	// Habits State
 	const [habitSearchQuery, setHabitSearchQuery] = useState('');
@@ -317,7 +329,7 @@ export default function App() {
 		const item = items.find(i => i.id === id);
 		const itemName = item ? item.name : 'Item';
 		
-		setToastMessage(!currentState ? `Moved ${itemName} to Cart` : `Moved ${itemName} back to List`);
+		setToastMessage(!currentState ? `${itemName} is in Cart` : `${itemName} is back in List`);
 		setHasDismissedReminder(false); 
 		setNowTick(Date.now());
 
@@ -375,7 +387,22 @@ export default function App() {
 		deleteDoc(doc(db, 'preferences', getPrefDocId(user.uid, nameKey)));
 	};
 
+	// Phase 1: Open the spend modal instead of instantly checking out
 	const handleFinishRun = () => {
+		if (!user) return;
+		const cartItems = items.filter(item => item.inCart);
+		if (cartItems.length === 0) return;
+		
+		if (trackSpend) {
+			setIsSpendModalOpen(true);
+		} else {
+			// If spend tracking is off, bypass modal and save immediately
+			handleConfirmSpendAndFinish({});
+		}
+	};
+
+	// Phase 2: Save the complete order document with spends and all items
+	const handleConfirmSpendAndFinish = (storeSpends: Record<string, number>) => {
 		if (!user) return;
 		const cartItems = items.filter(item => item.inCart);
 		if (cartItems.length === 0) return;
@@ -390,30 +417,56 @@ export default function App() {
 
 		setHasDismissedReminder(false);
 		setExpandedCartStore(null);
+		setIsSpendModalOpen(false);
 
-		const trackableHabitItems = cartItems
-			.filter(item => item.trackHabit !== false)
-			.map(item => ({
-				name: item.name,
-				category: normalizeCategoryName(item.category),
-				store: item.store || 'Other',
-				trackHabit: true
-			}));
+		// Calculate per-store spend breakdown matching the new v2 schema exactly
+		const storeBreakdown = cartStoreNames.map(storeName => {
+			const count = (cartGroupedByStore[storeName] || []).length;
+			const spend = storeSpends[storeName] || 0;
+			return {
+				storeId: storeName,
+				storeName: storeName,
+				shortCode: getStoreShortCode(storeName),
+				itemCount: count,
+				totalCents: Math.round(spend * 100)
+			};
+		});
 
-		if (trackableHabitItems.length > 0) {
-			addDoc(collection(db, 'purchaseHistory'), {
-				date: checkoutTime,
-				userId: user.uid,
-				items: trackableHabitItems
-			});
-			const count = trackableHabitItems.length;
-			setToastMessage(`Run complete. ${count} ${count === 1 ? 'item' : 'items'} added to Habits.`);
+		const totalCents = storeBreakdown.reduce((sum, s) => sum + s.totalCents, 0);
+
+		// Save ALL items (both tracked and 1-time) matching the new v2 schema exactly
+		const historyItems = cartItems.map(item => ({
+			itemId: item.id,
+			name: item.name,
+			category: normalizeCategoryName(item.category),
+			storeId: item.store || 'Other',
+			trackHabit: item.trackHabit !== false
+		}));
+
+		const spendStatus = trackSpend ? (totalCents > 0 ? 'logged' : 'skipped') : 'off';
+
+		addDoc(collection(db, 'purchaseHistory'), {
+			date: checkoutTime, // keeping for legacy fallback just in case
+			completedAt: checkoutTime,
+			userId: user.uid,
+			totalCents,
+			stores: storeBreakdown,
+			items: historyItems,
+			schemaVersion: 2,
+			spendStatus
+		});
+
+		// Notify user
+		if (trackSpend && totalCents > 0) {
+			setToastMessage(`Run logged! $${(totalCents / 100).toFixed(2)} spent across ${cartStoreNames.length} stores.`);
 		} else {
-			setToastMessage("Run complete. All one-time purchases cleared.");
+			setToastMessage("Run complete! Items saved to history.");
 		}
 
-		setActiveTab('habits');
+		// Navigate directly to the History ledger to review the new run
+		setActiveTab('history');
 
+		// Sync preferences & clear active items from cart
 		for (const item of cartItems) {
 			const nameKey = normalizeItemName(item.name);
 			const prefPayload: any = {
@@ -431,7 +484,6 @@ export default function App() {
 		}
 	};
 
-	// CORE DATA REMOVAL LOGIC (With exact item name support for Toast)
 	const executeRemoveHabitItems = async (itemKeys: string[], singleDisplayName?: string) => {
 		if (!user || itemKeys.length === 0) return;
 		const targetSet = new Set(itemKeys.map(k => normalizeItemName(k)));
@@ -648,7 +700,6 @@ export default function App() {
 		return { isActive: true, isPaused: false, durationLabel };
 	}, [cartTabItems, nowTick]);
 
-	// UNIFIED HABITS PIPELINE
 	const habitsDashboardData = useMemo(() => {
 		const itemHistory: Record<string, { itemData: GroceryItem, latestOrderTime: number, history: {date: number, store: string}[], count: number, isTracked: boolean }> = {};
 		
@@ -704,16 +755,14 @@ export default function App() {
 			const rawNameKey = record.itemData.name.toLowerCase();
 			const itemNameKey = normalizeItemName(rawNameKey);
 
-			// Use canonical title-cased display name if mapped via ITEM_SYNONYM_MAP
 			const canonicalDisplayName = ITEM_SYNONYM_MAP[rawNameKey]
-				? itemNameKey.replace(/\b\w/g, c => c.toUpperCase())
+				? itemNameKey.replace(/ \w/g, c => c.toUpperCase())
 				: record.itemData.name;
 
 			if (record.history.length > 0) {
 				const sortedHistory = [...record.history].sort((a, b) => a.date - b.date);
 				const lastPurchase = sortedHistory[sortedHistory.length - 1];
 				
-				// FIX: Read true historical store from order record first, fallback to preferences only if missing
 				lastPurchasedStore = (lastPurchase && lastPurchase.store && lastPurchase.store !== 'Unknown')
 					? lastPurchase.store
 					: (preferences[itemNameKey]?.lastPurchasedStore || 'Other');
@@ -772,7 +821,6 @@ export default function App() {
 				roundedDaysSince !== null &&
 				roundedDaysSince <= 45;
 
-			// Flag items that are >= 3.5x past their normal cycle (min 45 days) as potentially outgrown/unused
 			const isOutgrown =
 				status === 'Lapsed' &&
 				roundedDaysSince !== null &&
@@ -877,7 +925,6 @@ export default function App() {
 		return result;
 	}, [habitsDashboardData, habitSearchQuery, habitSortFilter, categoryOrderMap]);
 
-	// TOUCH & MULTI-SELECT HANDLERS
 	const handleTouchStart = (habitId: string, e: React.TouchEvent) => {
 		if (isSelectionMode) return;
 		touchStartXRef.current = e.touches[0].clientX;
@@ -948,7 +995,6 @@ export default function App() {
 		}
 	};
 
-	// UNIFIED STORE LOGO RENDERER (Matches List Tab Store Logos & Enlarges Shoppers/FreshCo)
 	const renderHabitStoreLogo = (rawStoreName?: string) => {
 		const cleanName = rawStoreName?.trim() || 'Other';
 		const officialStore = STORE_OPTIONS.find(
@@ -1021,6 +1067,8 @@ export default function App() {
 			setActiveTab={setActiveTab} 
 			userEmail={user.email}
 			cartCount={cartTabItems.length}
+			trackSpend={trackSpend}
+			onToggleTrackSpend={handleToggleTrackSpend}
 		>
 			
 			{showStaleCartWarning && (
@@ -1106,11 +1154,16 @@ export default function App() {
 						)}
 
 						{listTabItems.length === 0 ? (
-							<div className="flex flex-col items-center justify-center pt-16 pb-8 text-center px-4 animate-fade-in">
-								<div className="w-24 h-24 bg-surface-container-high rounded-full flex items-center justify-center mb-6" aria-hidden="true">
-									<span className="material-symbols-outlined text-5xl text-on-surface-variant/40">shopping_cart</span>
+							<div className="flex flex-col items-center justify-center pt-12 pb-8 text-center px-4 animate-fade-in">
+								<div className="w-20 h-20 bg-surface-container-high rounded-full flex items-center justify-center mb-5" aria-hidden="true">
+									<span className="material-symbols-outlined text-4xl text-on-surface-variant/40">shopping_cart</span>
 								</div>
-								<h3 className="text-xl font-headline font-bold text-on-surface mb-2">Your list is empty</h3>
+								<h3 className="text-xl font-headline font-bold text-on-surface mb-2">
+									Your list is empty
+								</h3>
+								<p className="text-sm text-slate-500 max-w-sm leading-relaxed">
+									Start adding items to your list. You can change an item's assigned store, category and tracking preferences by tapping it.
+								</p>
 							</div>
 						) : (
 							<div className="flex flex-col gap-2">
@@ -1125,7 +1178,6 @@ export default function App() {
 												alt={storeName} 
 												className={`${officialStore.logoClass || 'h-7 sm:h-8 max-w-[140px] sm:max-w-[160px]'} object-contain object-left`} 
 												onError={(e) => { 
-													// Fallback: hide broken image and show store name text instead
 													e.currentTarget.style.display = 'none';
 													const parent = e.currentTarget.parentElement;
 													if (parent && !parent.querySelector('.fallback-text')) {
@@ -1149,7 +1201,6 @@ export default function App() {
 										</div>
 									);
 									
-									// Push checked (inCart: true) items to the bottom, then sort by category and alphabetically
 									const sortedItems = [...itemsInStore].sort((a, b) => {
 										if (a.inCart !== b.inCart) {
 											return Number(a.inCart) - Number(b.inCart);
@@ -1386,7 +1437,6 @@ export default function App() {
 									</span>
 								</div>
 
-								{/* BATCH SELECTION CONTROL BAR / HOW IT WORKS BANNER */}
 								{isSelectionMode ? (
 									<div className="bg-white rounded-2xl p-3 shadow-sm border border-emerald-800/10 flex flex-col gap-2">
 										<div className="flex items-center justify-between">
@@ -1479,7 +1529,6 @@ export default function App() {
 								</div>
 							</div>
 
-							{/* HABIT CARDS STREAM */}
 							<div className="flex flex-col gap-3.5">
 								{filteredAndSortedHabits.map((habit) => {
 									const isAlreadyOnList = listTabItems.some(i => normalizeItemName(i.name) === normalizeItemName(habit.name));
@@ -1525,7 +1574,6 @@ export default function App() {
 											key={habit.id}
 											className="group relative overflow-hidden rounded-3xl select-none"
 										>
-											{/* REVEALED MOBILE SWIPE ACTION PANEL (Hidden on desktop and during selection mode) */}
 											<div 
 												onClick={() => {
 													if (!isSelectionMode) {
@@ -1545,7 +1593,6 @@ export default function App() {
 												</div>
 											</div>
 
-											{/* FRONT CARD SURFACE (Always 100% opaque bg-white) */}
 											<article 
 												onTouchStart={(e) => handleTouchStart(habit.id, e)}
 												onTouchMove={(e) => handleTouchMove(habit.id, e)}
@@ -1569,10 +1616,8 @@ export default function App() {
 														: 'border border-slate-100/90'
 												}`}
 											>
-												{/* TOP ROW: Checkbox + Emoji + Title + Status Pill + Desktop Trash Icon */}
 												<div className="flex items-center justify-between mb-3 gap-2">
 													<div className="flex items-center space-x-2.5 min-w-0 flex-1">
-														{/* Circular Checkbox: Always visible in selection mode; reveals on card hover on desktop */}
 														<div 
 															onClick={(e) => {
 																e.stopPropagation();
@@ -1620,7 +1665,6 @@ export default function App() {
 															</span>
 														</button>
 
-														{/* DESKTOP SUBTLE HOVER TRASH ICON */}
 														{!isSelectionMode && (
 															<button
 																type="button"
@@ -1638,7 +1682,6 @@ export default function App() {
 													</div>
 												</div>
 
-												{/* 2X2 METRIC GRID BOX */}
 												<div className="bg-[#F8FAF9] rounded-2xl p-3 border border-slate-100 grid grid-cols-2 gap-y-2.5 gap-x-4 mb-3">
 													<div>
 														<span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Purchases</span>
@@ -1662,7 +1705,6 @@ export default function App() {
 													</div>
 												</div>
 
-												{/* ACCURATE CATEGORY & FREQUENTLY PURCHASED BADGES */}
 												<div className="flex items-center flex-wrap gap-2 mb-3">
 													<span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${getCategoryBgColor(displayHabitCat)}`}>
 														<Icon icon={getCategoryIcon(displayHabitCat)} className="text-[14px] shrink-0" aria-hidden="true" />
@@ -1677,7 +1719,6 @@ export default function App() {
 													)}
 												</div>
 
-												{/* CADENCE PROGRESS INDICATOR */}
 												{(habit.status === 'Restock Soon' || habit.status === 'In Stock') && (
 													<div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-1">
 														<div 
@@ -1743,6 +1784,11 @@ export default function App() {
 							</div>
 						</section>
 					</div>
+				)}
+				
+				{/* 4TH TAB: PURCHASE HISTORY LEDGER */}
+				{activeTab === 'history' && (
+					<PurchaseHistoryView orders={purchaseHistory} userId={user.uid} trackSpend={trackSpend} />
 				)}
 			</div>
 
@@ -1891,6 +1937,17 @@ export default function App() {
 					onForget={handleForgetPreference}
 				/>
 			)}
+
+			{/* CHECKOUT SPEND MODAL */}
+			<CheckoutSpendModal
+				isOpen={isSpendModalOpen}
+				stores={cartStoreNames.map(name => ({
+					name,
+					itemCount: (cartGroupedByStore[name] || []).length
+				}))}
+				onClose={() => setIsSpendModalOpen(false)}
+				onConfirm={handleConfirmSpendAndFinish}
+			/>
 
 			<Toast 
 				message={toastMessage || ''} 
