@@ -1,9 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { STORE_OPTIONS, getStoreShortCode, normalizeCategoryName, getItemIcon } from '../constants';
+import { STORE_OPTIONS, getStoreShortCode, normalizeCategoryName } from '../constants';
 import { db } from '../firebase';
-import { doc, updateDoc, addDoc, collection, setDoc, deleteDoc, onSnapshot, query, where } from 'firebase/firestore';
+import { doc, updateDoc, addDoc, collection, setDoc, deleteDoc, getDocs, query, where, onSnapshot, QuerySnapshot, DocumentData } from 'firebase/firestore';
 import { toast } from 'sonner';
-import { Icon } from '@iconify/react';
 
 interface StoreSpend {
   storeId: string;
@@ -45,10 +44,6 @@ export function PurchaseHistoryView({ orders, userId, trackSpend }: PurchaseHist
   const [currency, setCurrency] = useState<Currency>('CAD');
   const [activeListItems, setActiveListItems] = useState<Record<string, string>>({}); // Live sync with active list
 
-  // Retroactive spend editing state
-  const [editingSpendRun, setEditingSpendRun] = useState<PurchaseRun | null>(null);
-  const [editStoreSpends, setEditStoreSpends] = useState<Record<string, string>>({});
-
   // LIVE DB SYNC: Watch the active shopping list so buttons update automatically even if items are added elsewhere
   React.useEffect(() => {
     if (!userId) return;
@@ -58,9 +53,9 @@ export function PurchaseHistoryView({ orders, userId, trackSpend }: PurchaseHist
       where('inCart', '==', false)
     );
     
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, (snapshot: QuerySnapshot<DocumentData, DocumentData>) => {
       const itemsMap: Record<string, string> = {};
-      snapshot.docs.forEach(docSnap => {
+      snapshot.docs.forEach((docSnap) => {
         const data = docSnap.data();
         if (data.name) {
           itemsMap[data.name.trim().toLowerCase()] = docSnap.id;
@@ -71,6 +66,10 @@ export function PurchaseHistoryView({ orders, userId, trackSpend }: PurchaseHist
 
     return () => unsubscribe();
   }, [userId]);
+
+  // Retroactive spend editing state
+  const [editingSpendRun, setEditingSpendRun] = useState<PurchaseRun | null>(null);
+  const [editStoreSpends, setEditStoreSpends] = useState<Record<string, string>>({});
 
   const formatMoney = (cents: number | null) => {
     if (cents === null) return '--';
@@ -174,6 +173,7 @@ export function PurchaseHistoryView({ orders, userId, trackSpend }: PurchaseHist
 
   const totalDisplayedSpend = displayedRuns.reduce((sum, r) => sum + (r.totalCents || 0), 0);
 
+  // Add individual item to list with duplicate check
   const handleAddSingleItemToList = async (runId: string, item: RunItem) => {
     const normalizedName = item.name.trim().toLowerCase();
     if (activeListItems[normalizedName]) {
@@ -229,7 +229,7 @@ export function PurchaseHistoryView({ orders, userId, trackSpend }: PurchaseHist
         toast.success(
           !currentTrackStatus 
             ? `${targetItem.name} is now being tracked` 
-            : `${targetItem.name} is now a 1-Time purchase`,
+            : `${targetItem.name} is now a 1-Time purchase.`,
           { position: 'bottom-center', style: { marginBottom: '76px' } }
         );
       }
@@ -250,6 +250,7 @@ export function PurchaseHistoryView({ orders, userId, trackSpend }: PurchaseHist
     }
   };
 
+  // Open modal to add or edit retroactive spend for a run
   const handleOpenEditSpend = (run: PurchaseRun, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const initialSpends: Record<string, string> = {};
