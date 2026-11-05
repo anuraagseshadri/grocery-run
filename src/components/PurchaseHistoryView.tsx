@@ -36,15 +36,12 @@ interface PurchaseHistoryViewProps {
   trackSpend: boolean;
 }
 
-type Currency = 'CAD' | 'INR';
-
 export function PurchaseHistoryView({ orders, userId, trackSpend }: PurchaseHistoryViewProps) {
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [currency, setCurrency] = useState<Currency>('CAD');
-  const [activeListItems, setActiveListItems] = useState<Record<string, string>>({}); // Live sync with active list
+  const [activeListItems, setActiveListItems] = useState<Record<string, string>>({});
 
-  // LIVE DB SYNC: Watch the active shopping list so buttons update automatically even if items are added elsewhere
+  // LIVE DB SYNC
   React.useEffect(() => {
     if (!userId) return;
     const q = query(
@@ -67,17 +64,12 @@ export function PurchaseHistoryView({ orders, userId, trackSpend }: PurchaseHist
     return () => unsubscribe();
   }, [userId]);
 
-  // Retroactive spend editing state
   const [editingSpendRun, setEditingSpendRun] = useState<PurchaseRun | null>(null);
   const [editStoreSpends, setEditStoreSpends] = useState<Record<string, string>>({});
 
   const formatMoney = (cents: number | null) => {
     if (cents === null) return '--';
-    const amount = cents / 100;
-    if (currency === 'INR') {
-      return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount);
-    }
-    return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(amount);
+    return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(cents / 100);
   };
 
   const normalizedRuns = useMemo(() => {
@@ -173,7 +165,6 @@ export function PurchaseHistoryView({ orders, userId, trackSpend }: PurchaseHist
 
   const totalDisplayedSpend = displayedRuns.reduce((sum, r) => sum + (r.totalCents || 0), 0);
 
-  // Add individual item to list with duplicate check
   const handleAddSingleItemToList = async (runId: string, item: RunItem) => {
     const normalizedName = item.name.trim().toLowerCase();
     if (activeListItems[normalizedName]) {
@@ -250,7 +241,6 @@ export function PurchaseHistoryView({ orders, userId, trackSpend }: PurchaseHist
     }
   };
 
-  // Open modal to add or edit retroactive spend for a run
   const handleOpenEditSpend = (run: PurchaseRun, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const initialSpends: Record<string, string> = {};
@@ -303,27 +293,8 @@ export function PurchaseHistoryView({ orders, userId, trackSpend }: PurchaseHist
   return (
     <div className="w-full flex flex-col gap-5 animate-fade-in pb-16">
       
-      {/* 1. Header Banner & Currency Toggle */}
+      {/* 1. Header Banner */}
       <section className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col gap-4 relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-4">
-          <div className="bg-slate-100 p-1 rounded-lg flex items-center shadow-xs">
-            <button
-              type="button"
-              onClick={() => setCurrency('CAD')}
-              className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${currency === 'CAD' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}
-            >
-              CAD
-            </button>
-            <button
-              type="button"
-              onClick={() => setCurrency('INR')}
-              className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${currency === 'INR' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}
-            >
-              INR
-            </button>
-          </div>
-        </div>
-
         <div>
           <h2 className="text-2xl font-headline font-bold text-slate-900">
             {trackSpend ? 'Receipts' : 'History'}
