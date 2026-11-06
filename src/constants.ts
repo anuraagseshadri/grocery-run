@@ -2,54 +2,65 @@
 
 export const getStoreShortCode = (storeName: string): string => {
   const n = storeName.toLowerCase().trim();
-  if (n === 'real canadian superstore') return 'RC';
-  if (n === 'costco') return 'CO';
+  if (n === 'real canadian superstore') return 'RCS';
+  if (n === 'costco' || n === 'costco wholesale') return 'CO';
   if (n === 'walmart') return 'WM';
-  if (n === 'no frills') return 'NF';
+  if (n === 'no frills' || n === 'nofrills') return 'NF';
   if (n === 'freshco') return 'FC';
-  if (n === 'shoppers drug mart') return 'SD';
-  if (n === "farmers' market") return 'FM';
+  if (n === 'shoppers drug mart') return 'SDM';
+  if (n === "farmers' market" || n === 'farmers market') return 'FM';
   if (n === 'asian grocery') return 'AG';
   if (n === 'indian grocery') return 'IG';
+  if (n === 'other') return 'OT';
   
   // Fallback: take first letter of first two words, or first two letters of one word
   const words = n.replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(Boolean);
   if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
   if (words.length === 1 && words[0].length >= 2) return words[0].substring(0, 2).toUpperCase();
-  return '??';
+  return 'OT';
 };
 
 export const STORE_OPTIONS = [
   { 
     name: 'Real Canadian Superstore', 
+    shortCode: 'RCS',
+    badgeColor: 'bg-[#173F73] text-[#D62828] border-[#FFFFFF]',
     color: 'bg-blue-50 border-blue-200 text-blue-800', 
     logo: 'Superstore', 
     imageLogo: '/logos/superstore.svg',
-    logoClass: 'h-6 sm:h-7 max-w-[130px]' // Wide wordmark
+    logoClass: 'h-6 sm:h-7 max-w-[130px]'
   },
   { 
     name: 'Costco', 
+    shortCode: 'CO',
+    badgeColor: 'bg-[#FFFFFF] text-[#E31837] border-[#005DAA]',
     color: 'bg-red-50 border-red-200 text-red-800', 
     logo: 'COSTCO', 
     imageLogo: '/logos/costco.svg',
-    logoClass: 'h-6 sm:h-7 max-w-[100px]' // Compact emblem
+    logoClass: 'h-6 sm:h-7 max-w-[100px]'
   },
   { 
     name: 'Walmart', 
+    shortCode: 'WM',
+    badgeColor: 'bg-[#0071CE] text-[#FFFFFF] border-[#FFC220]',
     color: 'bg-sky-50 border-sky-200 text-sky-800', 
     logo: 'Walmart', 
     imageLogo: '/logos/walmart.svg',
-    logoClass: 'h-5 sm:h-6 max-w-[110px]' // Very wide wordmark
+    logoClass: 'h-5 sm:h-6 max-w-[110px]'
   },
   { 
     name: 'No Frills', 
+    shortCode: 'NF',
+    badgeColor: 'bg-[#FFD100] text-[#171717] border-[#D71920]',
     color: 'bg-yellow-50 border-yellow-300 text-yellow-900', 
     logo: 'no frills', 
     imageLogo: '/logos/nofrills.svg',
-    logoClass: 'h-6 sm:h-7 max-w-[120px]' // Wide wordmark
+    logoClass: 'h-6 sm:h-7 max-w-[120px]'
   },
   {
     name: 'FreshCo',
+    shortCode: 'FC',
+    badgeColor: 'bg-[#AEF359] text-[#000000] border-[#84cc16]',
     logo: 'FreshCo',
     logoClass: 'h-8 sm:h-10 max-w-[170px]',
     imageLogo: '/logos/freshco.svg',
@@ -57,28 +68,38 @@ export const STORE_OPTIONS = [
   },
   { 
     name: 'Shoppers Drug Mart', 
+    shortCode: 'SDM',
+    badgeColor: 'bg-[#D7193F] text-[#FFFFFF] border-[#1769AA]',
     color: 'bg-rose-50 border-rose-200 text-rose-800', 
     logo: 'SHOPPERS', 
     imageLogo: '/logos/sdm.svg',
-    logoClass: 'h-7 sm:h-8 max-w-[140px]' // Compact wordmark / slightly taller optical weight
+    logoClass: 'h-7 sm:h-8 max-w-[140px]'
   },
   { 
     name: "Farmers' Market", 
+    shortCode: 'FM',
+    badgeColor: 'bg-[#C62828] text-[#FFFFFF] border-[#D4A017]',
     color: 'bg-amber-100/80 border-amber-300 text-amber-950 shadow-sm', 
-    logo: " FARMERS' MARKET" 
+    logo: "FARMERS' MARKET" 
   },
   { 
     name: 'Asian Grocery', 
+    shortCode: 'AG',
+    badgeColor: 'bg-[#A93226] text-[#FFD700] border-[#E5B94B]',
     logo: 'ASIAN GROCERY', 
     color: 'bg-gradient-to-r from-red-700 to-rose-900 text-white border-red-900 shadow-sm' 
   },
   { 
     name: 'Indian Grocery', 
+    shortCode: 'IG',
+    badgeColor: 'bg-[#E88718] text-[#FFFFFF] border-[#138808]',
     logo: 'INDIAN GROCERY', 
     color: 'bg-gradient-to-r from-[#FF9933] via-[#FFFFFF] to-[#138808] text-slate-900 border-slate-300 shadow-sm'
   },
   { 
     name: 'Other', 
+    shortCode: 'OT',
+    badgeColor: 'bg-[#64748B] text-[#FFFFFF] border-[#94A3B8]',
     color: 'bg-white border-slate-200 text-slate-600', 
     logo: 'Other' 
   }

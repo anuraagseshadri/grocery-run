@@ -1788,7 +1788,12 @@ export default function App() {
 				
 				{/* 4TH TAB: PURCHASE HISTORY LEDGER */}
 				{activeTab === 'history' && (
-					<PurchaseHistoryView orders={purchaseHistory} userId={user.uid} trackSpend={trackSpend} />
+					<PurchaseHistoryView 
+						orders={purchaseHistory} 
+						userId={user.uid} 
+						trackSpend={trackSpend} 
+						onToggleTrackSpend={handleToggleTrackSpend} 
+					/>
 				)}
 			</div>
 
